@@ -242,14 +242,6 @@ function AdminLogin() {
                 </form>
 
                 <footer className="al-footer">
-                    <button
-                        type="button"
-                        className="al-back"
-                        onClick={() => navigate('/')}
-                        aria-label="Go back to homepage"
-                    >
-                        Back to Home
-                    </button>
                 </footer>
             </div>
         </main>
