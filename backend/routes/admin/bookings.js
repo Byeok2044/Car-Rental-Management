@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
-import Booking from '../../models/Booking.js';
+import Booking from '../../models/booking.js';
 import Car from '../../models/cars.js';
 import { requireAdmin } from '../../middleware/auth.js';
 import { fmtPeso } from '../../utils/helpers.js';
@@ -11,7 +11,7 @@ import {
     buildQuoteEmail,
     buildExtensionEmail,
 } from '../../utils/email.js';
-
+import { generateReceiptPDF } from '../../utils/pdf.js';
 const router = Router();
 router.use(requireAdmin);
 
@@ -209,6 +209,27 @@ router.put('/:id/extend', async (req, res) => {
     } catch (err) {
         console.error('Extend booking error:', err);
         res.status(500).json({ message: 'Server Error: Could not extend booking.' });
+    }
+});
+
+router.get('/:id/receipt', async (req, res) => {
+    try {
+        const booking = await Booking.findById(req.params.id).populate('carId');
+        if (!booking) return res.status(404).send('Booking not found');
+
+        const carTitle = booking.carId?.title || 'Vehicle';
+        const pdfBuffer = await generateReceiptPDF(booking, carTitle);
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `inline; filename=receipt-${booking._id}.pdf`,
+            'Content-Length': pdfBuffer.length,
+        });
+
+        res.send(pdfBuffer);
+    } catch (err) {
+        console.error('PDF Receipt Error:', err);
+        res.status(500).send('Error generating professional receipt');
     }
 });
 

@@ -6,6 +6,7 @@ import { bookingLimiter } from '../middleware/rateLimiter.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { emailRegex, clean } from '../utils/helpers.js';
 import { sendEmail, buildSubmittedEmail } from '../utils/email.js';
+import { generateReceiptPDF } from '../utils/pdf.js';
 
 const router = Router();
 
@@ -143,6 +144,27 @@ router.get('/', requireAdmin, async (req, res) => {
         res.json(await Booking.find().sort({ createdAt: -1 }).populate('carId', 'title type image'));
     } catch {
         res.status(500).json({ message: 'Server Error.' });
+    }
+});
+
+router.get('/:id/receipt', async (req, res) => {
+    try {
+        const booking = await Booking.findById(req.params.id).populate('carId');
+        if (!booking) return res.status(404).send('Booking not found');
+
+        const carTitle = booking.carId?.title || 'Vehicle';
+        const pdfBuffer = await generateReceiptPDF(booking, carTitle);
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `inline; filename=receipt-${booking._id}.pdf`,
+            'Content-Length': pdfBuffer.length,
+        });
+
+        res.send(pdfBuffer);
+    } catch (err) {
+        console.error('PDF Receipt Error:', err);
+        res.status(500).send('Error generating professional receipt');
     }
 });
 
