@@ -163,7 +163,7 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
-// PUT /api/admin/bookings/:id/extend
+// PUT /api/admin/bookings/:id/extend  (kept for backwards compatibility)
 router.put('/:id/extend', async (req, res) => {
     const { extraDays, reason } = req.body;
     const extra = Number(extraDays);
@@ -209,6 +209,88 @@ router.put('/:id/extend', async (req, res) => {
     } catch (err) {
         console.error('Extend booking error:', err);
         res.status(500).json({ message: 'Server Error: Could not extend booking.' });
+    }
+});
+
+// PUT /api/admin/bookings/:id/adjust
+// Pending → can change startDate AND endDate
+// Active  → can only change endDate (extend or shorten return date)
+router.put('/:id/adjust', async (req, res) => {
+    const { startDate, endDate, reason } = req.body;
+
+    if (!endDate) {
+        return res.status(400).json({ message: 'endDate is required.' });
+    }
+
+    try {
+        const booking = await Booking.findById(req.params.id).populate('carId', 'title type dailyRate image');
+        if (!booking) return res.status(404).json({ message: 'Booking not found.' });
+
+        if (!['Pending', 'Active'].includes(booking.status)) {
+            return res.status(400).json({
+                message: `Cannot adjust a "${booking.status}" booking. Only Pending or Active bookings can be adjusted.`,
+            });
+        }
+
+        const newEnd = new Date(endDate);
+        newEnd.setHours(0, 0, 0, 0);
+
+        let newStart = new Date(booking.startDate);
+        newStart.setHours(0, 0, 0, 0);
+
+        // Pending: allow start date change too
+        if (booking.status === 'Pending' && startDate) {
+            const parsedStart = new Date(startDate);
+            parsedStart.setHours(0, 0, 0, 0);
+            if (parsedStart >= newEnd) {
+                return res.status(400).json({ message: 'Start date must be before end date.' });
+            }
+            newStart = parsedStart;
+            booking.startDate = newStart;
+        }
+
+        if (newEnd <= newStart) {
+            return res.status(400).json({ message: 'End date must be after start date.' });
+        }
+
+        // Calculate new rental days (inclusive)
+        const msPerDay = 1000 * 60 * 60 * 24;
+        const newRentalDays = Math.round((newEnd - newStart) / msPerDay) + 1;
+
+        const oldRentalDays = booking.rentalDays || 1;
+        const dayDiff = newRentalDays - oldRentalDays;
+
+        booking.endDate    = newEnd;
+        booking.rentalDays = newRentalDays;
+
+        // Adjust quoted price if daily rate exists
+        const dailyRate = booking.carId?.dailyRate ?? 0;
+        if (dailyRate > 0 && booking.quotedPrice != null && dayDiff !== 0) {
+            const adjustment = dailyRate * (booking.qty ?? 1) * dayDiff;
+            booking.quotedPrice = Math.max(0, (booking.quotedPrice || 0) + adjustment);
+            booking.totalCost   = booking.quotedPrice;
+        }
+
+        // Append internal note
+        const action = dayDiff > 0
+            ? `extended +${dayDiff}d`
+            : dayDiff < 0
+            ? `shortened ${dayDiff}d`
+            : 'dates adjusted';
+        const note = `[Adjustment: ${action}${reason ? ': ' + reason.trim() : ''}]`;
+        booking.paymentNotes = booking.paymentNotes
+            ? `${booking.paymentNotes} ${note}`
+            : note;
+
+        await booking.save();
+
+        const populated = await Booking.findById(booking._id).populate('carId', 'title type image');
+
+        console.log(`Booking ${booking._id} adjusted: ${newStart.toDateString()} → ${newEnd.toDateString()} (${newRentalDays}d)`);
+        res.json({ message: 'Booking adjusted successfully.', booking: populated });
+    } catch (err) {
+        console.error('Adjust booking error:', err);
+        res.status(500).json({ message: 'Server Error: Could not adjust booking.' });
     }
 });
 

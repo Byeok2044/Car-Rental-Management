@@ -340,44 +340,119 @@ function PaymentPanel({ booking, onUpdated }) {
 }
 
 
-// ─── NEW: Extend Booking Panel ────────────────────────────────────────────────
-function ExtendPanel({ booking, onExtended }) {
+// ============================================================
+// CHANGES TO MAKE IN src/pages/BookingsPage.jsx
+// ============================================================
+//
+// CHANGE 1: Replace the entire ExtendPanel function (from
+//   "function ExtendPanel({ booking, onExtended }) {"
+//   to its closing "}" before BookingDrawer)
+//   with the AdjustBookingPanel function below.
+//
+// CHANGE 2: In BookingDrawer, find:
+//   {/* ── NEW: Extend Panel ── */}
+//   <ExtendPanel
+//       booking={booking}
+//       onExtended={(updated) => { setBooking(updated); onBookingUpdate(updated); }}
+//   />
+//
+//   Replace with:
+//   {/* ── Adjust Booking Dates ── */}
+//   <AdjustBookingPanel
+//       booking={booking}
+//       onAdjusted={(updated) => { setBooking(updated); onBookingUpdate(updated); }}
+//   />
+//
+// ============================================================
+// REPLACEMENT COMPONENT (paste where ExtendPanel was):
+// ============================================================
+
+function AdjustBookingPanel({ booking, onAdjusted }) {
     const [open,      setOpen]      = useState(false);
-    const [extraDays, setExtraDays] = useState('');
+    const [startDate, setStartDate] = useState('');
+    const [endDate,   setEndDate]   = useState('');
     const [reason,    setReason]    = useState('');
     const [saving,    setSaving]    = useState(false);
     const [error,     setError]     = useState('');
     const [success,   setSuccess]   = useState('');
 
+    const isPending = booking.status === 'Pending';
+    const isActive  = booking.status === 'Active';
+    const canAdjust = isPending || isActive;
+
+    function toInputDate(isoOrDate) {
+        if (!isoOrDate) return '';
+        const d = new Date(isoOrDate);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    }
+
+    function fmtDisplay(isoOrDate) {
+        if (!isoOrDate) return '—';
+        return new Date(isoOrDate).toLocaleDateString('en-PH', {
+            month: 'short', day: 'numeric', year: 'numeric',
+        });
+    }
+
+    function calcDays(s, e) {
+        if (!s || !e) return null;
+        const start = new Date(s);
+        const end   = new Date(e);
+        const diff  = Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
+        return diff > 0 ? diff : null;
+    }
+
     useEffect(() => {
         setOpen(false);
-        setExtraDays('');
+        setStartDate('');
+        setEndDate('');
         setReason('');
         setError('');
         setSuccess('');
     }, [booking._id]);
 
-    const canExtend = ['Pending', 'Active'].includes(booking.status);
-    const presets   = [1, 3, 7, 14, 30];
+    function handleOpen() {
+        setStartDate(toInputDate(booking.startDate));
+        setEndDate(toInputDate(booking.endDate));
+        setReason('');
+        setError('');
+        setSuccess('');
+        setOpen(true);
+    }
 
     async function submit() {
-        const days = Number(extraDays);
-        if (!days || isNaN(days) || days < 1) {
-            setError('Enter a valid number of days (minimum 1).'); return;
-        }
-        setSaving(true); setError(''); setSuccess('');
+        setError('');
+        if (!endDate) { setError('End date is required.'); return; }
+        if (isPending && !startDate) { setError('Start date is required.'); return; }
+
+        const s = new Date(isPending ? startDate : booking.startDate);
+        const e = new Date(endDate);
+        s.setHours(0, 0, 0, 0);
+        e.setHours(0, 0, 0, 0);
+
+        if (e <= s) { setError('End date must be after start date.'); return; }
+
+        setSaving(true);
         try {
-            const data = await apiFetch(`/api/admin/bookings/${booking._id}/extend`, {
+            const body = { endDate, reason: reason.trim() || undefined };
+            if (isPending) body.startDate = startDate;
+
+            const data = await apiFetch(`/api/admin/bookings/${booking._id}/adjust`, {
                 method:  'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body:    JSON.stringify({ extraDays: days, reason: reason.trim() || undefined }),
+                body:    JSON.stringify(body),
             });
-            const newReturn = fmt(data.booking.endDate);
-            setSuccess(`Extended by ${days} day${days !== 1 ? 's' : ''}. New return: ${newReturn}`);
-            setExtraDays('');
+
+            const displayStart = isPending ? startDate : booking.startDate;
+            const newDays = calcDays(displayStart, endDate);
+            setSuccess(
+                `Dates adjusted. New period: ${fmtDisplay(displayStart)} → ${fmtDisplay(endDate)} (${newDays} day${newDays !== 1 ? 's' : ''})`
+            );
             setReason('');
-            setTimeout(() => { setSuccess(''); setOpen(false); }, 2500);
-            onExtended(data.booking);
+            setTimeout(() => { setSuccess(''); setOpen(false); }, 2800);
+            onAdjusted(data.booking);
         } catch (err) {
             setError(err.message);
         } finally {
@@ -385,17 +460,24 @@ function ExtendPanel({ booking, onExtended }) {
         }
     }
 
+    const previewStart = isPending ? startDate : toInputDate(booking.startDate);
+    const previewDays  = calcDays(previewStart, endDate);
+    const oldDays      = booking.rentalDays || 1;
+    const dayDiff      = previewDays != null ? previewDays - oldDays : null;
+
     return (
         <div className="bp-drawer__section">
-            <p className="bp-drawer__label">Extend Booking</p>
+            <p className="bp-drawer__label">
+                {isPending ? 'Adjust Booking Dates' : 'Adjust Return Date'}
+            </p>
 
-            {!canExtend ? (
+            {!canAdjust ? (
                 <p style={{ fontSize: '0.8rem', color: '#9ca3af', fontStyle: 'italic', margin: 0 }}>
-                    Only Pending or Active bookings can be extended.
+                    Only Pending or Active bookings can be adjusted.
                 </p>
             ) : !open ? (
                 <button
-                    onClick={() => setOpen(true)}
+                    onClick={handleOpen}
                     style={{
                         display: 'flex', alignItems: 'center', gap: 6,
                         padding: '8px 14px',
@@ -417,7 +499,7 @@ function ExtendPanel({ booking, onExtended }) {
                         <line x1="12" y1="14" x2="12" y2="18"/>
                         <line x1="10" y1="16" x2="14" y2="16"/>
                     </svg>
-                    Extend Return Date
+                    {isPending ? 'Adjust Start & Return Dates' : 'Adjust Return Date'}
                 </button>
             ) : (
                 <div style={{
@@ -426,10 +508,10 @@ function ExtendPanel({ booking, onExtended }) {
                     borderRadius: 10,
                     padding: 14,
                 }}>
-                    {/* Current return info */}
+                    {/* Current dates info */}
                     <div style={{
                         background: '#dcfce7', borderRadius: 7,
-                        padding: '8px 12px', marginBottom: 12,
+                        padding: '8px 12px', marginBottom: 14,
                         display: 'flex', alignItems: 'center', gap: 8,
                     }}>
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5">
@@ -438,100 +520,122 @@ function ExtendPanel({ booking, onExtended }) {
                             <line x1="12" y1="16" x2="12.01" y2="16"/>
                         </svg>
                         <span style={{ fontSize: '0.78rem', color: '#065f46', fontWeight: 600 }}>
-                            Current return: <strong>{fmt(booking.endDate)}</strong>
-                            &nbsp;·&nbsp; {booking.rentalDays} day{booking.rentalDays !== 1 ? 's' : ''} total
+                            Current:&nbsp;
+                            <strong>{fmtDisplay(booking.startDate)}</strong>
+                            &nbsp;→&nbsp;
+                            <strong>{fmtDisplay(booking.endDate)}</strong>
+                            &nbsp;·&nbsp;{oldDays} day{oldDays !== 1 ? 's' : ''}
                         </span>
                     </div>
 
-                    {/* Quick-select presets */}
-                    <p style={{ fontSize: '0.7rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>
-                        Quick add
-                    </p>
-                    <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
-                        {presets.map(d => (
-                            <button
-                                key={d}
-                                type="button"
-                                onClick={() => { setExtraDays(String(d)); setError(''); }}
+                    {/* Start date — Pending only */}
+                    {isPending && (
+                        <>
+                            <label style={{
+                                fontSize: '0.72rem', fontWeight: 700, color: '#6b7280',
+                                display: 'block', marginBottom: 4,
+                                textTransform: 'uppercase', letterSpacing: '0.06em',
+                            }}>
+                                New Start Date *
+                            </label>
+                            <input
+                                type="date"
+                                value={startDate}
+                                disabled={saving}
+                                onChange={e => { setStartDate(e.target.value); setError(''); }}
                                 style={{
-                                    padding: '4px 10px', borderRadius: 20,
-                                    border: `1.5px solid ${extraDays === String(d) ? '#16a34a' : '#bbf7d0'}`,
-                                    background: extraDays === String(d) ? '#16a34a' : 'white',
-                                    color: extraDays === String(d) ? 'white' : '#065f46',
-                                    fontSize: '0.75rem', fontWeight: 700,
-                                    cursor: 'pointer', fontFamily: 'inherit',
-                                    transition: 'all 0.12s',
+                                    width: '100%', padding: '9px 12px',
+                                    border: '1.5px solid #bbf7d0', borderRadius: 7,
+                                    fontSize: '0.9rem', fontFamily: 'inherit',
+                                    outline: 'none', boxSizing: 'border-box',
+                                    marginBottom: 10, background: 'white',
                                 }}
-                            >
-                                +{d}d
-                            </button>
-                        ))}
-                    </div>
+                            />
+                        </>
+                    )}
 
-                    {/* Custom days input */}
-                    <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                        Days to add *
+                    {/* End date — always shown */}
+                    <label style={{
+                        fontSize: '0.72rem', fontWeight: 700, color: '#6b7280',
+                        display: 'block', marginBottom: 4,
+                        textTransform: 'uppercase', letterSpacing: '0.06em',
+                    }}>
+                        {isActive ? 'New Return Date *' : 'New End Date *'}
                     </label>
                     <input
-                        type="number" min="1" max="365" step="1"
-                        value={extraDays} disabled={saving}
-                        onChange={e => { setExtraDays(e.target.value); setError(''); }}
-                        placeholder="e.g. 3"
+                        type="date"
+                        value={endDate}
+                        disabled={saving}
+                        min={isPending && startDate ? startDate : toInputDate(booking.startDate)}
+                        onChange={e => { setEndDate(e.target.value); setError(''); }}
                         style={{
                             width: '100%', padding: '9px 12px',
                             border: '1.5px solid #bbf7d0', borderRadius: 7,
                             fontSize: '0.9rem', fontFamily: 'inherit',
-                            outline: 'none', boxSizing: 'border-box', marginBottom: 8, background: 'white',
+                            outline: 'none', boxSizing: 'border-box',
+                            marginBottom: 10, background: 'white',
                         }}
                     />
 
-                    {/* Preview new return date */}
-                    {extraDays && Number(extraDays) > 0 && (
+                    {/* Preview */}
+                    {previewDays != null && previewDays > 0 && (
                         <div style={{
                             background: '#ecfdf5', padding: '8px 12px',
-                            borderRadius: 6, marginBottom: 8,
+                            borderRadius: 6, marginBottom: 10,
                             fontSize: '0.82rem', color: '#065f46', fontWeight: 600,
                         }}>
-                            {(() => {
-                                const d = new Date(booking.endDate);
-                                d.setDate(d.getDate() + Number(extraDays));
-                                const newReturn = d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
-                                const newTotal  = (booking.rentalDays || 1) + Number(extraDays);
-                                return `New return: ${newReturn} · ${newTotal} days total`;
-                            })()}
+                            New period:&nbsp;
+                            {fmtDisplay(isPending ? startDate : booking.startDate)} → {fmtDisplay(endDate)}
+                            &nbsp;·&nbsp;{previewDays} day{previewDays !== 1 ? 's' : ''}
+                            {dayDiff !== 0 && dayDiff != null && (
+                                <span style={{ marginLeft: 8, color: dayDiff > 0 ? '#065f46' : '#b45309' }}>
+                                    ({dayDiff > 0 ? `+${dayDiff}` : dayDiff} day{Math.abs(dayDiff) !== 1 ? 's' : ''})
+                                </span>
+                            )}
                         </div>
                     )}
 
                     {/* Reason */}
-                    <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    <label style={{
+                        fontSize: '0.72rem', fontWeight: 700, color: '#6b7280',
+                        display: 'block', marginBottom: 4,
+                        textTransform: 'uppercase', letterSpacing: '0.06em',
+                    }}>
                         Reason (optional)
                     </label>
                     <textarea
                         value={reason} disabled={saving} rows={2}
                         onChange={e => setReason(e.target.value)}
-                        placeholder="e.g. Customer requested additional days"
+                        placeholder="e.g. Customer requested schedule change"
                         style={{
                             width: '100%', padding: '9px 12px',
                             border: '1.5px solid #bbf7d0', borderRadius: 7,
                             fontSize: '0.875rem', fontFamily: 'inherit',
                             resize: 'vertical', outline: 'none',
-                            boxSizing: 'border-box', marginBottom: 8, background: 'white',
+                            boxSizing: 'border-box', marginBottom: 10, background: 'white',
                         }}
                     />
 
+                    {/* Info note */}
                     <p style={{ fontSize: '0.72rem', color: '#16a34a', margin: '0 0 10px' }}>
-                        {booking.customerEmail
-                            ? 'An extension confirmation email will be sent to the customer.'
-                            : 'No customer email on file — extension note saved internally only.'}
+                        {isPending
+                            ? 'Both start and return dates will be updated. Adjustment note saved internally.'
+                            : 'Only the return date will be updated. Adjustment note saved internally.'}
                     </p>
 
                     {error && (
-                        <p style={{ color: '#991b1b', fontSize: '0.8rem', margin: '0 0 10px', background: '#fee2e2', padding: '6px 10px', borderRadius: 6 }}>
+                        <p style={{
+                            color: '#991b1b', fontSize: '0.8rem', margin: '0 0 10px',
+                            background: '#fee2e2', padding: '6px 10px', borderRadius: 6,
+                        }}>
                             {error}
                         </p>
                     )}
                     {success && (
-                        <p style={{ color: '#065f46', fontSize: '0.82rem', margin: '0 0 10px', background: '#dcfce7', padding: '6px 10px', borderRadius: 6, fontWeight: 600 }}>
+                        <p style={{
+                            color: '#065f46', fontSize: '0.82rem', margin: '0 0 10px',
+                            background: '#dcfce7', padding: '6px 10px', borderRadius: 6, fontWeight: 600,
+                        }}>
                             ✓ {success}
                         </p>
                     )}
@@ -539,22 +643,22 @@ function ExtendPanel({ booking, onExtended }) {
                     <div style={{ display: 'flex', gap: 8 }}>
                         <button
                             onClick={submit}
-                            disabled={saving || !extraDays || Number(extraDays) < 1}
+                            disabled={saving || !endDate || (isPending && !startDate)}
                             style={{
                                 padding: '8px 18px',
-                                background: saving || !extraDays ? '#86efac' : '#16a34a',
+                                background: (saving || !endDate || (isPending && !startDate)) ? '#86efac' : '#16a34a',
                                 color: '#fff', border: 'none', borderRadius: 7,
-                                cursor: saving || !extraDays ? 'not-allowed' : 'pointer',
+                                cursor: (saving || !endDate || (isPending && !startDate)) ? 'not-allowed' : 'pointer',
                                 fontSize: '0.85rem', fontWeight: 700,
                                 fontFamily: 'inherit',
-                                opacity: saving || !extraDays ? 0.7 : 1,
+                                opacity: (saving || !endDate || (isPending && !startDate)) ? 0.7 : 1,
                                 transition: 'all 0.15s',
                             }}
                         >
-                            {saving ? 'Saving…' : 'Confirm Extension'}
+                            {saving ? 'Saving…' : 'Confirm Adjustment'}
                         </button>
                         <button
-                            onClick={() => { setOpen(false); setError(''); setExtraDays(''); setReason(''); }}
+                            onClick={() => { setOpen(false); setError(''); setStartDate(''); setEndDate(''); setReason(''); }}
                             disabled={saving}
                             style={{
                                 padding: '8px 14px', background: 'transparent',
@@ -707,7 +811,7 @@ const handlePrint = async () => {
                         />
 
                         {/* ── NEW: Extend Panel ── */}
-                        <ExtendPanel
+                        <AdjustBookingPanel
                             booking={booking}
                             onExtended={(updated) => { setBooking(updated); onBookingUpdate(updated); }}
                         />
