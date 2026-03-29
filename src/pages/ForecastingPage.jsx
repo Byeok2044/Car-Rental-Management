@@ -115,13 +115,14 @@ const Icons = {
             <line x1="12" y1="22.08" x2="12" y2="12"/>
         </svg>
     ),
-    Tag: () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        {/* This draws a standard price tag shape instead of a $ sign */}
-        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
-        <line x1="7" y1="7" x2="7.01" y2="7"></line>
-    </svg>
-),
+  Tag: () => (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M7 21V5h5a5 5 0 0 1 0 10H7" />
+            <line x1="5" y1="8" x2="16" y2="8" />
+            <line x1="5" y1="11" x2="16" y2="11" />
+        </svg>
+    ),
+    
     TrendUp: () => (
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
