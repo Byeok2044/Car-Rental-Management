@@ -7,6 +7,13 @@ export const transporter = nodemailer.createTransport({
     auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
 });
 
+export function getTransporter() {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+        console.warn('Email credentials not set. Email functions will be disabled.');
+    }
+    return transporter;
+}
+
 // ── HTML TEMPLATE ─────────────────────────────────────────────────────────────
 
 export function htmlShell(title, body, accent = '#2563eb') {

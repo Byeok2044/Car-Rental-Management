@@ -1,16 +1,18 @@
+// 1. Load environment variables IMMEDIATELY before any other imports
+import 'dotenv/config'; 
+
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import { setServers } from 'node:dns/promises';
 import { generalLimiter } from './middleware/rateLimiter.js';
 import connectDB from './config/db.js';
 import router from './routes/index.js';
 import { getTransporter } from './utils/email.js';
 
-dotenv.config();
+// Set DNS servers
 setServers(['1.1.1.1', '8.8.8.8']);
 
-// Verify email AFTER dotenv has loaded credentials
+// Now getTransporter() will have access to process.env.EMAIL_USER
 getTransporter().verify(err =>
     err ? console.warn('Email not ready:', err.message) : console.log('Email ready')
 );
