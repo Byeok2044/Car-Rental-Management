@@ -297,7 +297,7 @@ function PaymentPanel({ booking, onUpdated }) {
                     <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                         Amount Received (₱) — Quote: {fmtCur(booking.quotedPrice)}
                     </label>
-                    <input type="number" min="0" step="0.01" value={amountPaid} disabled={saving}
+                    <input type="number" min="0" step="1" value={amountPaid} disabled={saving}
                         onChange={e => { setAmountPaid(e.target.value); setError(''); }}
                         placeholder={`e.g. ${booking.quotedPrice}`}
                         style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #a7f3d0', borderRadius: 7, fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', marginBottom: 8 }}
