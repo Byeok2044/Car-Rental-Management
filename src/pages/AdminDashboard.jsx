@@ -4,12 +4,14 @@ import FleetPage from './FleetPage.jsx';
 import BookingsPage from './BookingsPage.jsx';
 import MessagesPage from './Messagespage.jsx';
 import ForecastingPage from './ForecastingPage.jsx';
+import ProfileModal from './ProfileModal.jsx'; // 1. Added import for the modal
 import './AdminDashboard.css';
 import Logo from '../assets/Logo.svg';
 import LName from '../assets/LName.png';
 
 const API_BASE_URL  = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const POLL_INTERVAL = 30_000;
+// REMOVED from here: const [isProfileOpen, setIsProfileOpen] = useState(false);
 
 function getToken() {
     return localStorage.getItem('adminToken') || sessionStorage.getItem('adminToken');
@@ -61,7 +63,6 @@ const Icons = {
             <polyline points="2 17 6 14 10 17 14 12 18 10 22 10"/>
         </svg>
     ),
-    // Peso sign icon: ₱
     Revenue: () => (
 <svg
   width="22"
@@ -73,13 +74,8 @@ const Icons = {
   strokeLinecap="round"
   strokeLinejoin="round"
 >
-  {/* Vertical stem */}
   <path d="M8 21V3" />
-
-  {/* Rounded P bowl */}
   <path d="M8 3h6a4.5 4.5 0 0 1 0 9H8" />
-
-  {/* Longer, aligned peso bars */}
   <path d="M5 6h13" />
   <path d="M5 9h13" />
 </svg>
@@ -403,6 +399,9 @@ function DashboardOverview({ data, loading, error, onRetry, onNav, lastRefreshed
 export default function AdminDashboard() {
     const navigate = useNavigate();
 
+    // 2. MOVED state inside the functional component
+    const [isProfileOpen, setIsProfileOpen] = useState(false);
+
     const [data,           setData]           = useState(null);
     const [loading,        setLoading]        = useState(true);
     const [error,          setError]          = useState(null);
@@ -613,8 +612,8 @@ export default function AdminDashboard() {
                                 <Icons.Refresh />
                             </button>
                         )}
-                        <div className="ad-avatar-group">
-                            <div className="ad-avatar">AD</div>
+                        <div className="ad-avatar-group" style={{ cursor: 'pointer' }} onClick={() => setIsProfileOpen(true)}>
+                           <div className="ad-avatar">AD</div>
                         </div>
                     </div>
                 </header>
@@ -637,6 +636,12 @@ export default function AdminDashboard() {
                     {activeNav === 'forecasting' && <ForecastingPage />}
                 </main>
             </div>
+            
+            {/* 3. Added the Modal component rendering here */}
+            <ProfileModal 
+                isOpen={isProfileOpen} 
+                onClose={() => setIsProfileOpen(false)} 
+            />
         </div>
     );
 }
