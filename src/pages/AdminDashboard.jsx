@@ -401,6 +401,9 @@ export default function AdminDashboard() {
 
     // 2. MOVED state inside the functional component
     const [isProfileOpen, setIsProfileOpen] = useState(false);
+    const [avatarColor, setAvatarColor] = useState(
+    () => localStorage.getItem('adminAvatarColor') || '#2563eb'
+);
 
     const [data,           setData]           = useState(null);
     const [loading,        setLoading]        = useState(true);
@@ -613,7 +616,7 @@ export default function AdminDashboard() {
                             </button>
                         )}
                         <div className="ad-avatar-group" style={{ cursor: 'pointer' }} onClick={() => setIsProfileOpen(true)}>
-                           <div className="ad-avatar">AD</div>
+                           <div className="ad-avatar" style={{ background: avatarColor }}>AD</div>
                         </div>
                     </div>
                 </header>
@@ -639,9 +642,13 @@ export default function AdminDashboard() {
             
             {/* 3. Added the Modal component rendering here */}
             <ProfileModal 
-                isOpen={isProfileOpen} 
-                onClose={() => setIsProfileOpen(false)} 
-            />
+            isOpen={isProfileOpen} 
+            onClose={() => setIsProfileOpen(false)}
+            onColorChange={(color) => {
+            setAvatarColor(color);
+            localStorage.setItem('adminAvatarColor', color);
+    }}
+/>
         </div>
     );
 }
