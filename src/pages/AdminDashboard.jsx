@@ -4,14 +4,13 @@ import FleetPage from './FleetPage.jsx';
 import BookingsPage from './BookingsPage.jsx';
 import MessagesPage from './Messagespage.jsx';
 import ForecastingPage from './ForecastingPage.jsx';
-import ProfileModal from './ProfileModal.jsx'; // 1. Added import for the modal
+import ProfileModal from './ProfileModal.jsx';
 import './AdminDashboard.css';
 import Logo from '../assets/Logo.svg';
 import LName from '../assets/LName.png';
 
 const API_BASE_URL  = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const POLL_INTERVAL = 30_000;
-// REMOVED from here: const [isProfileOpen, setIsProfileOpen] = useState(false);
 
 function getToken() {
     return localStorage.getItem('adminToken') || sessionStorage.getItem('adminToken');
@@ -399,11 +398,8 @@ function DashboardOverview({ data, loading, error, onRetry, onNav, lastRefreshed
 export default function AdminDashboard() {
     const navigate = useNavigate();
 
-    // 2. MOVED state inside the functional component
     const [isProfileOpen, setIsProfileOpen] = useState(false);
-    const [avatarColor, setAvatarColor] = useState(
-    () => localStorage.getItem('adminAvatarColor') || '#2563eb'
-);
+    const [avatarColor, setAvatarColor] = useState('#2563eb');
 
     const [data,           setData]           = useState(null);
     const [loading,        setLoading]        = useState(true);
@@ -422,6 +418,40 @@ export default function AdminDashboard() {
     useEffect(() => {
         if (!getToken()) navigate('/admin/login', { replace: true });
     }, [navigate]);
+
+    // Fetch avatar color from backend on mount
+    useEffect(() => {
+        const fetchAvatarColor = async () => {
+            try {
+                const token = getToken();
+                if (!token) return;
+                
+                const res = await fetch(`${API_BASE_URL}/api/admin/profile`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                
+                if (res.ok) {
+                    const profile = await res.json();
+                    if (profile?.avatarColor) {
+                        setAvatarColor(profile.avatarColor);
+                        // Cache locally for offline fallback
+                        localStorage.setItem('adminAvatarColor', profile.avatarColor);
+                    }
+                } else {
+                    // Fallback to localStorage if backend fails
+                    const cached = localStorage.getItem('adminAvatarColor');
+                    if (cached) setAvatarColor(cached);
+                }
+            } catch (err) {
+                console.error('Failed to fetch avatar color:', err);
+                // Fallback to localStorage
+                const cached = localStorage.getItem('adminAvatarColor');
+                if (cached) setAvatarColor(cached);
+            }
+        };
+
+        fetchAvatarColor();
+    }, []);
 
     const fetchData = useCallback(async (silent = false) => {
         if (!silent) setLoading(true);
@@ -508,6 +538,12 @@ export default function AdminDashboard() {
             clearToken();
             navigate('/admin/login', { replace: true });
         }
+    };
+
+    const handleColorChange = (color) => {
+        setAvatarColor(color);
+        // Cache locally but backend is source of truth
+        localStorage.setItem('adminAvatarColor', color);
     };
 
     function navTo(id) { 
@@ -640,15 +676,12 @@ export default function AdminDashboard() {
                 </main>
             </div>
             
-            {/* 3. Added the Modal component rendering here */}
             <ProfileModal 
-            isOpen={isProfileOpen} 
-            onClose={() => setIsProfileOpen(false)}
-            onColorChange={(color) => {
-            setAvatarColor(color);
-            localStorage.setItem('adminAvatarColor', color);
-    }}
-/>
+                isOpen={isProfileOpen} 
+                onClose={() => setIsProfileOpen(false)}
+                onColorChange={handleColorChange}
+                currentColor={avatarColor}
+            />
         </div>
     );
 }

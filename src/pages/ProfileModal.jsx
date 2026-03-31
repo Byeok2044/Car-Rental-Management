@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import './ProfileModal.css'; // Import the new CSS file
+import './ProfileModal.css';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -48,8 +48,16 @@ function SaveIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fil
 function CloseIcon() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>; }
 
 /* ── Main Component ─────────────────────────────────────────────────────── */
-export default function ProfileModal({ isOpen, onClose, onColorChange }) {
-    const EMPTY = { fullName: '', bio: '', phone: '', email: '', role: 'Administrator', location: '', avatarColor: '#2563eb' };
+export default function ProfileModal({ isOpen, onClose, onColorChange, currentColor }) {
+    const EMPTY = { 
+        fullName: '', 
+        bio: '', 
+        phone: '', 
+        email: '', 
+        role: 'Administrator', 
+        location: '', 
+        avatarColor: currentColor || '#2563eb' 
+    };
 
     const [form,    setForm]    = useState(EMPTY);
     const [saved,   setSaved]   = useState(null);
@@ -70,21 +78,21 @@ export default function ProfileModal({ isOpen, onClose, onColorChange }) {
                     email:       data.email       || '',
                     role:        data.role        || 'Administrator',
                     location:    data.location    || '',
-                    avatarColor: data.avatarColor || '#2563eb',
+                    avatarColor: data.avatarColor || currentColor || '#2563eb',
                 };
                 setForm(profile);
                 setSaved(profile);
+                // Immediately sync color with parent
                 if (onColorChange && profile.avatarColor) {
-                onColorChange(profile.avatarColor);
-                localStorage.setItem('adminAvatarColor', profile.avatarColor);
-}
+                    onColorChange(profile.avatarColor);
+                }
             }
         } catch (err) {
             setError('Failed to load profile: ' + err.message);
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [currentColor, onColorChange]);
 
     // Only fetch data when the modal opens
     useEffect(() => { 
@@ -103,25 +111,30 @@ export default function ProfileModal({ isOpen, onClose, onColorChange }) {
     }, [isOpen, fetchProfile]);
 
     const handleChange = (key, value) => {
-    setForm(prev => ({ ...prev, [key]: value }));
-    setSuccess(false);
-    if (key === 'avatarColor' && onColorChange) {
-        onColorChange(value);
-    }
-};
+        setForm(prev => ({ ...prev, [key]: value }));
+        setSuccess(false);
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSaving(true); setError(''); setSuccess(false);
         try {
-            const data = await apiFetch('/api/admin/profile', {
+            const response = await apiFetch('/api/admin/profile', {
                 method: 'POST',
                 body: JSON.stringify(form),
             });
+            
             setSaved({ ...form });
             setSuccess(true);
-            if (onColorChange) onColorChange(form.avatarColor);
+            
+            // Ensure color is synced after save
+            if (onColorChange) {
+                onColorChange(form.avatarColor);
+            }
+            
+            // Update localStorage as cache
             localStorage.setItem('adminAvatarColor', form.avatarColor);
+            
             setTimeout(() => setSuccess(false), 3000);
         } catch (err) {
             setError(err.message);
