@@ -1,12 +1,18 @@
+// backend/routes/admin/dashboard.js  (ARIMA-enhanced version)
+// Drop-in replacement for your existing dashboard.js
+// New endpoint: GET /api/dashboard/arima-forecast
+
 import { Router } from 'express';
-import Booking from '../../models/Booking.js';
-import Car from '../../models/cars.js';
+import Booking from '../../models/booking.js';
+import Car    from '../../models/cars.js';
 import { requireAdmin } from '../../middleware/auth.js';
+import { forecastRevenue, forecastBookings, forecastDemandByType, quickNextMonth }
+    from '../../utils/arimaClient.js';
 
 const router = Router();
 router.use(requireAdmin);
 
-// GET /api/dashboard/analytics
+// ─── Existing: GET /api/dashboard/analytics ──────────────────────────────────
 router.get('/analytics', async (req, res) => {
     try {
         const [{ total: totalRevenue } = { total: 0 }] = await Booking.aggregate([
@@ -115,7 +121,7 @@ router.get('/analytics', async (req, res) => {
     }
 });
 
-// GET /api/dashboard/seasonal
+// ─── Existing: GET /api/dashboard/seasonal ───────────────────────────────────
 router.get('/seasonal', async (req, res) => {
     try {
         const monthlyVolume = await Booking.aggregate([
@@ -229,6 +235,122 @@ router.get('/seasonal', async (req, res) => {
     } catch (err) {
         console.error('Seasonal analytics error:', err);
         res.status(500).json({ success: false, message: 'Server Error.' });
+    }
+});
+
+
+// ─── NEW: GET /api/dashboard/arima-forecast ───────────────────────────────────
+/**
+ * Builds time-series data from the database, calls the Python ARIMA service,
+ * and returns structured forecasts for revenue, bookings, and vehicle type demand.
+ *
+ * Query params:
+ *   ?periods=6   (default 6, max 12)
+ */
+router.get('/arima-forecast', async (req, res) => {
+    const periods = Math.min(parseInt(req.query.periods || '6', 10), 12);
+
+    try {
+        // 1. Build monthly revenue + booking history from DB
+        const monthlyData = await Booking.aggregate([
+            { $match: { status: 'Completed' } },
+            {
+                $group: {
+                    _id: {
+                        year:  { $year:  '$startDate' },
+                        month: { $month: '$startDate' },
+                    },
+                    revenue:  { $sum: '$totalCost' },
+                    bookings: { $sum: 1 },
+                },
+            },
+            { $sort: { '_id.year': 1, '_id.month': 1 } },
+        ]);
+
+        const revenueHistory  = [];
+        const bookingHistory  = [];
+
+        for (const row of monthlyData) {
+            const period = `${row._id.year}-${String(row._id.month).padStart(2, '0')}`;
+            const label  = new Date(row._id.year, row._id.month - 1)
+                .toLocaleString('en', { month: 'short', year: 'numeric' });
+            revenueHistory.push({ period, label, revenue:  row.revenue  });
+            bookingHistory.push({ period, label, bookings: row.bookings });
+        }
+
+        // 2. Build per-vehicle-type booking history
+        const typeData = await Booking.aggregate([
+            { $match: { status: { $ne: 'Cancelled' } } },
+            { $lookup: { from: 'cars', localField: 'carId', foreignField: '_id', as: 'car' } },
+            { $unwind: '$car' },
+            {
+                $group: {
+                    _id: {
+                        type:  '$car.type',
+                        year:  { $year:  '$startDate' },
+                        month: { $month: '$startDate' },
+                    },
+                    bookings: { $sum: 1 },
+                },
+            },
+            { $sort: { '_id.year': 1, '_id.month': 1 } },
+        ]);
+
+        const typeHistoryMap = {};
+        for (const row of typeData) {
+            const { type, year, month } = row._id;
+            if (!typeHistoryMap[type]) typeHistoryMap[type] = [];
+            const period = `${year}-${String(month).padStart(2, '0')}`;
+            typeHistoryMap[type].push({ period, bookings: row.bookings });
+        }
+
+        // 3. Call ARIMA service (all three endpoints in parallel)
+        const [revFc, bookFc, typeFc] = await Promise.all([
+            revenueHistory.length  >= 3 ? forecastRevenue(revenueHistory, periods)  : null,
+            bookingHistory.length  >= 3 ? forecastBookings(bookingHistory, periods)  : null,
+            Object.keys(typeHistoryMap).length > 0
+                ? forecastDemandByType(typeHistoryMap, Math.min(periods, 3))
+                : null,
+        ]);
+
+        // 4. Quick next-month snapshot
+        const rawRevValues  = revenueHistory.map(r => r.revenue);
+        const rawBookValues = bookingHistory.map(r => r.bookings);
+        const nextMonth = rawRevValues.length >= 3 || rawBookValues.length >= 3
+            ? await quickNextMonth(rawRevValues, rawBookValues)
+            : null;
+
+        // 5. Determine data quality
+        const dataQuality = {
+            monthsOfData: monthlyData.length,
+            hasEnoughData: monthlyData.length >= 6,
+            arimaServiceAvailable: !!(revFc || bookFc),
+            message: monthlyData.length < 3
+                ? 'Need at least 3 months of completed bookings for ARIMA forecasting.'
+                : monthlyData.length < 6
+                ? 'Forecast accuracy improves with more historical data (6+ months recommended).'
+                : `ARIMA trained on ${monthlyData.length} months of data.`,
+        };
+
+        res.json({
+            success: true,
+            data: {
+                revenueHistory,
+                bookingHistory,
+                revenueForecast:  revFc?.forecasts  || [],
+                bookingForecast:  bookFc?.forecasts  || [],
+                typeForecast:     typeFc?.results    || {},
+                nextMonth:        nextMonth || null,
+                diagnostics: {
+                    revenue:  revFc?.diagnostics  || null,
+                    bookings: bookFc?.diagnostics  || null,
+                },
+                dataQuality,
+            },
+        });
+    } catch (err) {
+        console.error('ARIMA forecast error:', err);
+        res.status(500).json({ success: false, message: 'Server Error: Could not generate ARIMA forecast.' });
     }
 });
 

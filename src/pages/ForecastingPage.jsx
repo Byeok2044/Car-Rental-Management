@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import ArimaForecastTab from './Arimaforecasttab';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -685,6 +686,7 @@ export default function ForecastingPage() {
         { id: 'inventory', label: 'Inventory',        Icon: Icons.Package  },
         { id: 'pricing',   label: 'Pricing',          Icon: Icons.Tag      },
         { id: 'forecast',  label: '4-Week Forecast',  Icon: Icons.TrendUp  },
+        { id: 'arima', label: 'ARIMA Forecast', Icon: Icons.TrendUp },
     ];
 
     return (
@@ -810,6 +812,7 @@ export default function ForecastingPage() {
                             avgByType={analyticsData.avgByType}
                         />
                     )}
+                    {activeTab === 'arima' && <ArimaForecastTab />}
                 </>
             )}
         </div>
