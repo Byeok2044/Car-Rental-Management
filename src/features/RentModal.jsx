@@ -72,6 +72,15 @@ function ChevronIcon({ open }) {
     );
 }
 
+function PlusIcon() {
+    return (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+    );
+}
+
 function LocationPicker({ value, onChange, disabled }) {
     const [open, setOpen]       = useState(false);
     const [query, setQuery]     = useState('');
@@ -306,12 +315,121 @@ function CartItem({ item, allCars, onUpdate, onRemove, index }) {
     );
 }
 
-function AddVehiclePanel({ allCars, cartCarIds, onAdd }) {
+// ── AddVehiclePanel supports two display modes:
+//    - default: dashed border block below cart (legacy)
+//    - inline:  compact button shown in the section header
+function AddVehiclePanel({ allCars, cartCarIds, onAdd, inline = false }) {
     const [open, setOpen] = useState(false);
+    const wrapRef = useRef(null);
     const available = allCars.filter(c => c.stock > 0 && !cartCarIds.includes(c._id));
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        function handleClick(e) {
+            if (wrapRef.current && !wrapRef.current.contains(e.target)) {
+                setOpen(false);
+            }
+        }
+        document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
+    }, []);
 
     if (available.length === 0) return null;
 
+    if (inline) {
+        return (
+            <div ref={wrapRef} style={{ position: 'relative' }}>
+                <button
+                    type="button"
+                    onClick={() => setOpen(v => !v)}
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        padding: '5px 12px',
+                        background: open ? '#eff6ff' : '#f8fafc',
+                        border: `1.5px solid ${open ? '#bfdbfe' : '#e2e8f0'}`,
+                        borderRadius: 8,
+                        cursor: 'pointer',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        color: open ? 'var(--primary-blue)' : '#475569',
+                        fontFamily: 'inherit',
+                        transition: 'all 0.15s',
+                        whiteSpace: 'nowrap',
+                    }}
+                >
+                    <PlusIcon />
+                    Add vehicle
+                    <ChevronIcon open={open} />
+                </button>
+
+                {open && (
+                    <div style={{
+                        position: 'absolute',
+                        top: 'calc(100% + 6px)',
+                        right: 0,
+                        zIndex: 50,
+                        background: '#fff',
+                        border: '1.5px solid #bfdbfe',
+                        borderRadius: 10,
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+                        minWidth: 240,
+                        maxHeight: 240,
+                        overflowY: 'auto',
+                        padding: '6px 0',
+                        animation: 'lpDrop 0.16s cubic-bezier(0.4,0,0.2,1) both',
+                    }}>
+                        {available.map(car => (
+                            <button
+                                key={car._id}
+                                type="button"
+                                onClick={() => { onAdd(car); setOpen(false); }}
+                                style={{
+                                    width: '100%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 10,
+                                    padding: '9px 14px',
+                                    border: 'none',
+                                    background: 'transparent',
+                                    fontFamily: 'inherit',
+                                    fontSize: '0.85rem',
+                                    textAlign: 'left',
+                                    cursor: 'pointer',
+                                    borderBottom: '1px solid #f9fafb',
+                                    transition: 'background 0.12s',
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.background = '#eff6ff'}
+                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                            >
+                                <img src={car.image} alt={car.title} style={{
+                                    width: 44, height: 30, borderRadius: 5,
+                                    objectFit: 'cover', flexShrink: 0,
+                                    border: '1px solid #e2e8f0',
+                                }} />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <span style={{ display: 'block', fontWeight: 600, color: '#111827', fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        {car.title}
+                                    </span>
+                                    <span style={{ display: 'block', fontSize: '0.72rem', color: '#9ca3af', marginTop: 1 }}>
+                                        {car.type} · {car.stock} available
+                                    </span>
+                                </div>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                                    stroke="var(--primary-blue)" strokeWidth="2.5"
+                                    strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                                </svg>
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    // Legacy block mode (kept for backwards compatibility)
     return (
         <div className="add-vehicle">
             <button type="button" className="add-vehicle__trigger" onClick={() => setOpen(v => !v)}>
@@ -453,7 +571,16 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
 
                 <div className="modal-body-split">
                     <div className="modal-left">
-                        <p className="modal-section-label">Your Selection</p>
+                        {/* Section header with inline Add Vehicle button */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <p className="modal-section-label" style={{ margin: 0 }}>Your Selection</p>
+                            <AddVehiclePanel
+                                allCars={allCars}
+                                cartCarIds={cartCarIds}
+                                onAdd={addVehicle}
+                                inline
+                            />
+                        </div>
 
                         <div className="cart-list">
                             {cart.map((item, i) => (
@@ -467,12 +594,6 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
                                 />
                             ))}
                         </div>
-
-                        <AddVehiclePanel
-                            allCars={allCars}
-                            cartCarIds={cartCarIds}
-                            onAdd={addVehicle}
-                        />
 
                         <div className="order-summary">
                             <p className="order-summary__label">Order Summary</p>
@@ -507,7 +628,6 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
                                     placeholder="Juan Dela Cruz"
                                     value={customer.fullName}
                                     onChange={e => {
-                                        // Strip out any characters that aren't letters, spaces, hyphens, apostrophes, or periods
                                         const raw = e.target.value.replace(/[^a-zA-ZÀ-ÖØ-öø-ÿ\s\-'.]/g, '');
                                         setCustomer(p => ({ ...p, fullName: raw }));
                                     }}
