@@ -5,6 +5,7 @@ import BookingsPage from './BookingsPage.jsx';
 import MessagesPage from './Messagespage.jsx';
 import ForecastingPage from './ForecastingPage.jsx';
 import ProfileModal from './ProfileModal.jsx';
+import { useAdminProfile } from '../hooks/Useadminprofile.js';
 import './AdminDashboard.css';
 import Logo from '../assets/Logo.svg';
 import LName from '../assets/LName.png';
@@ -63,21 +64,10 @@ const Icons = {
         </svg>
     ),
     Revenue: () => (
-<svg
-  width="22"
-  height="22"
-  viewBox="0 0 24 24"
-  fill="none"
-  stroke="currentColor"
-  strokeWidth="2"
-  strokeLinecap="round"
-  strokeLinejoin="round"
->
-  <path d="M8 21V3" />
-  <path d="M8 3h6a4.5 4.5 0 0 1 0 9H8" />
-  <path d="M5 6h13" />
-  <path d="M5 9h13" />
-</svg>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8 21V3"/><path d="M8 3h6a4.5 4.5 0 0 1 0 9H8"/>
+            <path d="M5 6h13"/><path d="M5 9h13"/>
+        </svg>
     ),
     Car: () => (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -118,13 +108,6 @@ const Icons = {
             <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
         </svg>
     ),
-    LogoVehicle: () => (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="1" y="3" width="15" height="13" rx="2"/>
-            <path d="M16 8h4l3 5v3h-7V8z"/>
-            <circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
-        </svg>
-    ),
 };
 
 const NAV_LINKS = [
@@ -142,9 +125,7 @@ function StatusBadge({ status }) {
 function StatCard({ title, value, subtitle, Icon, accent, index }) {
     return (
         <div className={`ad-stat-card ad-stat-card--${accent}`} style={{ animationDelay: `${index * 0.1}s` }}>
-            <div className="ad-stat-card__icon">
-                <Icon />
-            </div>
+            <div className="ad-stat-card__icon"><Icon /></div>
             <div className="ad-stat-card__body">
                 <p className="ad-stat-card__title">{title}</p>
                 <p className="ad-stat-card__value">{value}</p>
@@ -197,9 +178,8 @@ function RevenueChart({ data }) {
 
 function FleetStatus({ fleet, bookingStats }) {
     if (!fleet.total) return null;
-    const avPct    = (fleet.available / fleet.total) * 100;
-    const rentPct  = (fleet.rented    / fleet.total) * 100;
-    // Consistent Green Theme for Donut
+    const avPct   = (fleet.available / fleet.total) * 100;
+    const rentPct = (fleet.rented    / fleet.total) * 100;
     const gradient = `conic-gradient(
         #10b981 0% ${avPct}%,
         #059669 ${avPct}% ${avPct + rentPct}%,
@@ -222,8 +202,8 @@ function FleetStatus({ fleet, bookingStats }) {
                 </div>
                 <div className="ad-fleet__legend">
                     {[
-                        { label: 'Available',   val: fleet.available,   color: '#ffe08a' },
-                        { label: 'Rented',      val: fleet.rented,      color: '#059669' },
+                        { label: 'Available', val: fleet.available, color: '#ffe08a' },
+                        { label: 'Rented',    val: fleet.rented,    color: '#059669' },
                     ].map(item => (
                         <div key={item.label} className="ad-fleet__legend-row">
                             <span className="ad-fleet__dot" style={{ backgroundColor: item.color }} />
@@ -261,45 +241,20 @@ function Skeleton() {
 
 function DashboardOverview({ data, loading, error, onRetry, onNav, lastRefreshed, isPolling }) {
     if (loading && !data) return <Skeleton />;
-
     if (error && !data) return (
         <div className="ad-error">
-            <span className="ad-error__icon" style={{ color: '#f59e0b' }}>
-                <Icons.Warning />
-            </span>
+            <span className="ad-error__icon" style={{ color: '#f59e0b' }}><Icons.Warning /></span>
             <h3>Failed to load dashboard</h3>
             <p>{error}</p>
             <button className="ad-error__btn" onClick={onRetry}>Retry</button>
         </div>
     );
-
     if (!data) return null;
 
     const stats = [
-        {
-            title:    'Total Revenue',
-            value:    formatCurrency(data.revenue.total),
-            subtitle: 'From completed bookings',
-            Icon:     Icons.Revenue,
-            accent:   'gold',
-            index:    0,
-        },
-        {
-            title:    'Active Rentals',
-            value:    data.fleet.rented,
-            subtitle: `${data.fleet.available} available`,
-            Icon:     Icons.Car,
-            accent:   'blue',
-            index:    1,
-        },
-        {
-            title:    'Total Fleet',
-            value:    data.fleet.total,
-            subtitle: `Varieties of Vehicles`,
-            Icon:     Icons.Garage,
-            accent:   'dark',
-            index:    2,
-        },
+        { title: 'Total Revenue',  value: formatCurrency(data.revenue.total), subtitle: 'From completed bookings', Icon: Icons.Revenue, accent: 'gold', index: 0 },
+        { title: 'Active Rentals', value: data.fleet.rented, subtitle: `${data.fleet.available} available`,        Icon: Icons.Car,     accent: 'blue', index: 1 },
+        { title: 'Total Fleet',    value: data.fleet.total,  subtitle: 'Varieties of Vehicles',                    Icon: Icons.Garage,  accent: 'dark', index: 2 },
     ];
 
     return (
@@ -327,42 +282,22 @@ function DashboardOverview({ data, loading, error, onRetry, onNav, lastRefreshed
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         {isPolling && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{
-                                    width: 7, height: 7, borderRadius: '50%',
-                                    background: '#10b981',
-                                    boxShadow: '0 0 0 0 rgba(16,185,129,0.4)',
-                                    animation: 'ad-pulse 2s infinite',
-                                    display: 'inline-block',
-                                }} />
+                                <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 0 0 rgba(16,185,129,0.4)', animation: 'ad-pulse 2s infinite', display: 'inline-block' }} />
                                 <span style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 600 }}>Live</span>
                             </div>
                         )}
-                        {lastRefreshed && (
-                            <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
-                                Updated {lastRefreshed}
-                            </span>
-                        )}
-                        <button className="ad-view-all-btn" onClick={() => onNav('bookings')}>
-                            View all bookings 
-                        </button>
+                        {lastRefreshed && <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>Updated {lastRefreshed}</span>}
+                        <button className="ad-view-all-btn" onClick={() => onNav('bookings')}>View all bookings</button>
                     </div>
                 </div>
                 <div className="ad-table-wrap">
                     <table className="ad-table">
                         <thead>
-                            <tr>
-                                {['Customer', 'Vehicle', 'Rental Period', 'Cost', 'Status', 'Booked'].map(h => (
-                                    <th key={h}>{h}</th>
-                                ))}
-                            </tr>
+                            <tr>{['Customer','Vehicle','Rental Period','Cost','Status','Booked'].map(h => <th key={h}>{h}</th>)}</tr>
                         </thead>
                         <tbody>
                             {data.recentBookings.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: '#9ca3af' }}>
-                                        No bookings yet.
-                                    </td>
-                                </tr>
+                                <tr><td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: '#9ca3af' }}>No bookings yet.</td></tr>
                             ) : data.recentBookings.map((b, i) => (
                                 <tr key={b.id} style={{ animationDelay: `${i * 0.07}s` }}>
                                     <td>
@@ -398,9 +333,10 @@ function DashboardOverview({ data, loading, error, onRetry, onNav, lastRefreshed
 export default function AdminDashboard() {
     const navigate = useNavigate();
 
-    const [isProfileOpen, setIsProfileOpen] = useState(false);
-    const [avatarColor, setAvatarColor] = useState('#2563eb');
+    // ── Profile (color + initials) — single source of truth ──────────────────
+    const { profile, updateProfile, avatarInitials } = useAdminProfile();
 
+    const [isProfileOpen,  setIsProfileOpen]  = useState(false);
     const [data,           setData]           = useState(null);
     const [loading,        setLoading]        = useState(true);
     const [error,          setError]          = useState(null);
@@ -419,40 +355,6 @@ export default function AdminDashboard() {
         if (!getToken()) navigate('/admin/login', { replace: true });
     }, [navigate]);
 
-    // Fetch avatar color from backend on mount
-    useEffect(() => {
-        const fetchAvatarColor = async () => {
-            try {
-                const token = getToken();
-                if (!token) return;
-                
-                const res = await fetch(`${API_BASE_URL}/api/admin/profile`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-                
-                if (res.ok) {
-                    const profile = await res.json();
-                    if (profile?.avatarColor) {
-                        setAvatarColor(profile.avatarColor);
-                        // Cache locally for offline fallback
-                        localStorage.setItem('adminAvatarColor', profile.avatarColor);
-                    }
-                } else {
-                    // Fallback to localStorage if backend fails
-                    const cached = localStorage.getItem('adminAvatarColor');
-                    if (cached) setAvatarColor(cached);
-                }
-            } catch (err) {
-                console.error('Failed to fetch avatar color:', err);
-                // Fallback to localStorage
-                const cached = localStorage.getItem('adminAvatarColor');
-                if (cached) setAvatarColor(cached);
-            }
-        };
-
-        fetchAvatarColor();
-    }, []);
-
     const fetchData = useCallback(async (silent = false) => {
         if (!silent) setLoading(true);
         setError(null);
@@ -466,9 +368,7 @@ export default function AdminDashboard() {
             const json = await res.json();
             if (!json.success) throw new Error(json.message);
             setData(json.data);
-            setLastRefreshed(
-                new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-            );
+            setLastRefreshed(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
             try {
                 const msgRes = await fetch(`${API_BASE_URL}/api/admin/messages`, {
                     headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -477,7 +377,7 @@ export default function AdminDashboard() {
                     const msgs = await msgRes.json();
                     setUnreadMessages(msgs.filter(m => m.status === 'Unread').length);
                 }
-            } catch {  }
+            } catch { /* non-fatal */ }
         } catch (err) {
             setError(err.message);
         } finally {
@@ -534,22 +434,18 @@ export default function AdminDashboard() {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
             });
-        } catch {  } finally {
+        } catch { /* non-fatal */ } finally {
             clearToken();
             navigate('/admin/login', { replace: true });
         }
     };
 
-    const handleColorChange = (color) => {
-        setAvatarColor(color);
-        // Cache locally but backend is source of truth
-        localStorage.setItem('adminAvatarColor', color);
-    };
+    /** Called by ProfileModal after a successful save */
+    const handleProfileSaved = useCallback((savedProfile) => {
+        updateProfile(savedProfile);
+    }, [updateProfile]);
 
-    function navTo(id) { 
-        setActiveNav(id); 
-        setSidebarOpen(false); 
-    }
+    function navTo(id) { setActiveNav(id); setSidebarOpen(false); }
 
     const pendingCount = data?.bookingStats.pending ?? 0;
 
@@ -570,7 +466,6 @@ export default function AdminDashboard() {
                 <div className="ad-sidebar__logo">
                     <div className="ad-sidebar__logo-icon">
                         <img src={Logo} alt="Logo" className="ad-sidebar__logo-img"/>
-                        
                     </div>
                     <div>
                         <img src={LName} alt="Brand Name" className="ad-sidebar__logo-name"/>
@@ -590,8 +485,8 @@ export default function AdminDashboard() {
                             >
                                 <span className="ad-nav-btn__icon"><NavIcon /></span>
                                 {link.label}
-                                {link.id === 'bookings'  && pendingCount    > 0 && <span className="ad-nav-btn__badge">{pendingCount}</span>}
-                                {link.id === 'messages'  && unreadMessages  > 0 && <span className="ad-nav-btn__badge">{unreadMessages}</span>}
+                                {link.id === 'bookings' && pendingCount   > 0 && <span className="ad-nav-btn__badge">{pendingCount}</span>}
+                                {link.id === 'messages' && unreadMessages > 0 && <span className="ad-nav-btn__badge">{unreadMessages}</span>}
                             </button>
                         );
                     })}
@@ -606,8 +501,7 @@ export default function AdminDashboard() {
                             { label: 'Completed', val: data.bookingStats.completed, cls: 'completed' },
                         ].map(s => (
                             <div key={s.label} className="ad-sidebar__mini-row">
-                                <span className={`ad-sidebar__mini-dot ad-sidebar__mini-dot--${s.cls}`} 
-                                      style={s.cls === 'active' ? { backgroundColor: '#10b981' } : {}} />
+                                <span className={`ad-sidebar__mini-dot ad-sidebar__mini-dot--${s.cls}`} />
                                 <span className="ad-sidebar__mini-label">{s.label}</span>
                                 <span className="ad-sidebar__mini-val">{s.val}</span>
                             </div>
@@ -616,11 +510,7 @@ export default function AdminDashboard() {
                 )}
 
                 <div className="ad-sidebar__footer">
-                    <button
-                        className="ad-sidebar__footer-btn ad-sidebar__footer-btn--logout"
-                        onClick={handleLogout}
-                        disabled={loggingOut}
-                    >
+                    <button className="ad-sidebar__footer-btn ad-sidebar__footer-btn--logout" onClick={handleLogout} disabled={loggingOut}>
                         {loggingOut ? <Icons.Spinner /> : <Icons.Logout />}
                         {loggingOut ? 'Logging out…' : 'Logout'}
                     </button>
@@ -638,9 +528,7 @@ export default function AdminDashboard() {
                                 {NAV_LINKS.find(n => n.id === activeNav)?.label}
                             </h1>
                             <p className="ad-header__date">
-                                {new Date().toLocaleDateString('en-US', {
-                                    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-                                })}
+                                {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                             </p>
                         </div>
                     </div>
@@ -651,8 +539,20 @@ export default function AdminDashboard() {
                                 <Icons.Refresh />
                             </button>
                         )}
-                        <div className="ad-avatar-group" style={{ cursor: 'pointer' }} onClick={() => setIsProfileOpen(true)}>
-                           <div className="ad-avatar" style={{ background: avatarColor }}>AD</div>
+                        {/* Avatar — color and initials always in sync with DB */}
+                        <div
+                            className="ad-avatar-group"
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => setIsProfileOpen(true)}
+                            title="Edit profile"
+                        >
+                            <div className="ad-avatar" style={{ background: profile.avatarColor }}>
+                                {avatarInitials}
+                            </div>
+                            <div className="ad-avatar-info">
+                                <p className="ad-avatar-name">{profile.fullName || 'Admin'}</p>
+                                <p className="ad-avatar-role">{profile.role || 'Administrator'}</p>
+                            </div>
                         </div>
                     </div>
                 </header>
@@ -660,9 +560,7 @@ export default function AdminDashboard() {
                 <main className="ad-body">
                     {activeNav === 'dashboard'   && (
                         <DashboardOverview
-                            data={data}
-                            loading={loading}
-                            error={error}
+                            data={data} loading={loading} error={error}
                             onRetry={() => fetchData(false)}
                             onNav={navTo}
                             lastRefreshed={lastRefreshed}
@@ -675,12 +573,12 @@ export default function AdminDashboard() {
                     {activeNav === 'forecasting' && <ForecastingPage />}
                 </main>
             </div>
-            
-            <ProfileModal 
-                isOpen={isProfileOpen} 
+
+            <ProfileModal
+                isOpen={isProfileOpen}
                 onClose={() => setIsProfileOpen(false)}
-                onColorChange={handleColorChange}
-                currentColor={avatarColor}
+                onProfileSaved={handleProfileSaved}
+                currentColor={profile.avatarColor}
             />
         </div>
     );

@@ -30,36 +30,36 @@ const AVATAR_COLORS = [
 ];
 
 const FIELDS = [
-    { key: 'fullName',  label: 'Full Name',       placeholder: 'e.g. Maria Santos',        type: 'text',  icon: PersonIcon  },
-    { key: 'role',      label: 'Job Title / Role', placeholder: 'e.g. Fleet Administrator', type: 'text',  icon: BadgeIcon   },
-    { key: 'email',     label: 'Contact Email',    placeholder: 'admin@example.com',         type: 'email', icon: MailIcon    },
-    { key: 'phone',     label: 'Phone Number',     placeholder: '+63 912 345 6789',          type: 'tel',   icon: PhoneIcon   },
-    { key: 'location',  label: 'Location / Branch',placeholder: 'e.g. Makati, Metro Manila', type: 'text',  icon: PinIcon     },
+    { key: 'fullName',  label: 'Full Name',        placeholder: 'e.g. Maria Santos',         type: 'text',  icon: PersonIcon  },
+    { key: 'role',      label: 'Job Title / Role',  placeholder: 'e.g. Fleet Administrator',  type: 'text',  icon: BadgeIcon   },
+    { key: 'email',     label: 'Contact Email',     placeholder: 'admin@example.com',          type: 'email', icon: MailIcon    },
+    { key: 'phone',     label: 'Phone Number',      placeholder: '+63 912 345 6789',           type: 'tel',   icon: PhoneIcon   },
+    { key: 'location',  label: 'Location / Branch', placeholder: 'e.g. Makati, Metro Manila',  type: 'text',  icon: PinIcon     },
 ];
 
-/* ── SVG Icons ─────────────────────────────────────────────────────────── */
 function PersonIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>; }
-function BadgeIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8l-2 4h12z"/></svg>; }
-function MailIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>; }
-function PhoneIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.6 19.79 19.79 0 0 1 1.62 5a2 2 0 0 1 1.99-2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 10.09a16 16 0 0 0 6 6l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>; }
-function PinIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>; }
-function CheckIcon() { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>; }
-function SaveIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>; }
-function CloseIcon() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>; }
+function BadgeIcon()  { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8l-2 4h12z"/></svg>; }
+function MailIcon()   { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>; }
+function PhoneIcon()  { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.6 19.79 19.79 0 0 1 1.62 5a2 2 0 0 1 1.99-2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 10.09a16 16 0 0 0 6 6l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>; }
+function PinIcon()    { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>; }
+function CheckIcon()  { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>; }
+function SaveIcon()   { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>; }
+function CloseIcon()  { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>; }
 
-/* ── Main Component ─────────────────────────────────────────────────────── */
-export default function ProfileModal({ isOpen, onClose, onColorChange, currentColor }) {
-    const EMPTY = { 
-        fullName: '', 
-        bio: '', 
-        phone: '', 
-        email: '', 
-        role: 'Administrator', 
-        location: '', 
-        avatarColor: currentColor || '#2563eb' 
-    };
+const EMPTY = {
+    fullName: '', bio: '', phone: '', email: '',
+    role: 'Administrator', location: '', avatarColor: '#2563eb',
+};
 
-    const [form,    setForm]    = useState(EMPTY);
+/**
+ * Props:
+ *   isOpen          — boolean
+ *   onClose         — () => void
+ *   onProfileSaved  — (profile: object) => void   ← called after successful save
+ *   currentColor    — string (optimistic initial color from parent)
+ */
+export default function ProfileModal({ isOpen, onClose, onProfileSaved, currentColor }) {
+    const [form,    setForm]    = useState({ ...EMPTY, avatarColor: currentColor || '#2563eb' });
     const [saved,   setSaved]   = useState(null);
     const [loading, setLoading] = useState(true);
     const [saving,  setSaving]  = useState(false);
@@ -82,31 +82,23 @@ export default function ProfileModal({ isOpen, onClose, onColorChange, currentCo
                 };
                 setForm(profile);
                 setSaved(profile);
-                // Immediately sync color with parent
-                if (onColorChange && profile.avatarColor) {
-                    onColorChange(profile.avatarColor);
-                }
             }
         } catch (err) {
             setError('Failed to load profile: ' + err.message);
         } finally {
             setLoading(false);
         }
-    }, [currentColor, onColorChange]);
+    }, [currentColor]);
 
-    // Only fetch data when the modal opens
-    useEffect(() => { 
+    useEffect(() => {
         if (isOpen) {
-            fetchProfile(); 
-            // Prevent background scrolling
+            fetchProfile();
             document.body.style.overflow = 'hidden';
         } else {
             document.body.style.overflow = 'unset';
-            // Reset states when closed
             setSuccess(false);
             setError('');
         }
-        
         return () => { document.body.style.overflow = 'unset'; };
     }, [isOpen, fetchProfile]);
 
@@ -123,18 +115,13 @@ export default function ProfileModal({ isOpen, onClose, onColorChange, currentCo
                 method: 'POST',
                 body: JSON.stringify(form),
             });
-            
+            const savedProfile = response.profile || form;
             setSaved({ ...form });
             setSuccess(true);
-            
-            // Ensure color is synced after save
-            if (onColorChange) {
-                onColorChange(form.avatarColor);
-            }
-            
-            // Update localStorage as cache
-            localStorage.setItem('adminAvatarColor', form.avatarColor);
-            
+
+            // Notify parent immediately — no localStorage dependency
+            if (onProfileSaved) onProfileSaved(savedProfile);
+
             setTimeout(() => setSuccess(false), 3000);
         } catch (err) {
             setError(err.message);
@@ -153,11 +140,9 @@ export default function ProfileModal({ isOpen, onClose, onColorChange, currentCo
 
     return (
         <div className="pm-overlay" onClick={onClose}>
-            {/* Prevent clicks inside the modal from closing it */}
             <div className="pm-modal" onClick={e => e.stopPropagation()}>
                 <form onSubmit={handleSubmit} className="pm-page">
-                    
-                    {/* Header strip */}
+
                     <div className="pm-header-strip">
                         <div className="pm-title-group">
                             <h2 className="pm-page-title">Admin Profile</h2>
@@ -168,7 +153,6 @@ export default function ProfileModal({ isOpen, onClose, onColorChange, currentCo
                         </button>
                     </div>
 
-                    {/* Loading State */}
                     {loading ? (
                         <div>
                             {[120, 80, 60, 60, 60, 60].map((h, i) => (
@@ -177,20 +161,17 @@ export default function ProfileModal({ isOpen, onClose, onColorChange, currentCo
                         </div>
                     ) : (
                         <>
-                            {/* Error / Success banners */}
-                            {error && <div className="pm-error-banner">{error}</div>}
+                            {error   && <div className="pm-error-banner">{error}</div>}
                             {success && (
                                 <div className="pm-success-banner">
                                     <CheckIcon /> Profile updated successfully!
                                 </div>
                             )}
 
-                            {/* Two-column layout */}
                             <div className="pm-grid">
-                                
                                 {/* LEFT: Avatar card */}
                                 <div className="pm-card">
-                                    <p className="pm-card-label">Avatar & Appearance</p>
+                                    <p className="pm-card-label">Avatar &amp; Appearance</p>
                                     <div className="pm-avatar-wrap">
                                         <div className="pm-avatar" style={{ background: form.avatarColor }}>
                                             {initials}
@@ -205,8 +186,7 @@ export default function ProfileModal({ isOpen, onClose, onColorChange, currentCo
                                     <div className="pm-color-grid">
                                         {AVATAR_COLORS.map(c => (
                                             <button
-                                                key={c}
-                                                type="button"
+                                                key={c} type="button"
                                                 className="pm-color-dot"
                                                 onClick={() => handleChange('avatarColor', c)}
                                                 title={c}
@@ -265,16 +245,11 @@ export default function ProfileModal({ isOpen, onClose, onColorChange, currentCo
                                 </div>
                             </div>
 
-                            {/* Bottom save row */}
                             <div className="pm-bottom-bar">
                                 <button type="submit" disabled={saving} className="pm-save-btn">
-                                    {saving ? (
-                                        <><span className="pm-spinner" />Saving…</>
-                                    ) : success ? (
-                                        <><CheckIcon />Saved!</>
-                                    ) : (
-                                        <><SaveIcon />Save Changes</>
-                                    )}
+                                    {saving  ? <><span className="pm-spinner" />Saving…</>
+                                    : success ? <><CheckIcon />Saved!</>
+                                    : <><SaveIcon />Save Changes</>}
                                 </button>
                                 {isDirty && <span className="pm-bottom-warning">You have unsaved changes</span>}
                             </div>
