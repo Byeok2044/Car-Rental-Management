@@ -79,15 +79,34 @@ def _add_months(dt: datetime, months: int) -> datetime:
     return dt.replace(year=year, month=month, day=1)
 
 
+def _next_n_months_from_now(n: int) -> list[tuple[str, str]]:
+    """
+    Returns the next n months starting from NEXT month relative to today.
+    e.g. if today is April 2026, returns May, Jun, Jul, Aug, Sep, Oct 2026
+    (for n=6).
+    """
+    # Always base on current date so forecast is relative to NOW, not
+    # the last historical data point (which can be months in the past).
+    base = datetime.now().replace(day=1)
+
+    results = []
+    for i in range(1, n + 1):
+        dt     = _add_months(base, i)
+        period = dt.strftime("%Y-%m")
+        label  = dt.strftime("%b %Y")
+        results.append((period, label))
+    return results
+
+
 def _next_n_months(last_period_str: str, n: int) -> list[tuple[str, str]]:
     """
-    Given a period string like '2025-04', return the next n months as
-    [('2025-05', 'May 2025'), ('2025-06', 'Jun 2025'), ...]
+    DEPRECATED internal helper kept only for demand_by_type which needs
+    per-type period alignment.  For revenue / bookings use
+    _next_n_months_from_now() instead.
     """
     try:
         base = datetime.strptime(last_period_str, "%Y-%m")
     except (ValueError, TypeError):
-        # Fallback: use current month as base
         base = datetime.now().replace(day=1)
 
     results = []
@@ -182,7 +201,7 @@ def health():
     return jsonify({
         "status":      "ok",
         "service":     "arima-forecast",
-        "version":     "v2",
+        "version":     "v3",
         "statsmodels": STATSMODELS_AVAILABLE,
         "dateutil":    DATEUTIL_AVAILABLE,
     })
@@ -209,9 +228,13 @@ def forecast_revenue():
 
     raw = _fit_arima(series, periods, order=order, seasonal_order=seasonal_order)
 
-    # ── FIXED: use reliable month-by-month date arithmetic ──
+    # KEY FIX: always start forecast from current month (today), not from
+    # the last historical data point.  This ensures if history ends in
+    # e.g. Feb 2026 but today is April 2026 the forecast shows
+    # May 2026, Jun 2026, … not Apr 2026, May 2026, …
+    future_months = _next_n_months_from_now(periods)
+
     last_period = history[-1].get("period", "") if history else ""
-    future_months = _next_n_months(last_period, periods)
 
     forecasts = []
     for i, ((pred, lo, hi), (period, label)) in enumerate(zip(raw, future_months)):
@@ -252,8 +275,9 @@ def forecast_bookings():
     d      = min(d, 2)
     raw    = _fit_arima(series, periods, order=(1, d, 1))
 
+    # KEY FIX: same as revenue — anchor to current date, not last history point
+    future_months = _next_n_months_from_now(periods)
     last_period   = history[-1].get("period", "") if history else ""
-    future_months = _next_n_months(last_period, periods)
 
     forecasts = []
     for (pred, lo, hi), (period, label) in zip(raw, future_months):
@@ -286,6 +310,9 @@ def forecast_demand_by_type():
     if not isinstance(history, dict) or not history:
         return jsonify({"success": False, "error": "history must be a non-empty object", "results": {}}), 400
 
+    # For type forecasts also anchor to current date
+    future_months_global = _next_n_months_from_now(periods)
+
     results = {}
     for vtype, data in history.items():
         values, err = _validate_time_series(data, "bookings")
@@ -297,11 +324,8 @@ def forecast_demand_by_type():
         _, d   = _ensure_stationary(series)
         raw    = _fit_arima(series, periods, order=(1, min(d, 1), 1))
 
-        last_period   = data[-1].get("period", "") if data else ""
-        future_months = _next_n_months(last_period, periods)
-
         fc_list = []
-        for (pred, lo, hi), (period, label) in zip(raw, future_months):
+        for (pred, lo, hi), (period, label) in zip(raw, future_months_global):
             fc_list.append({
                 "period":    period,
                 "label":     label,
@@ -333,7 +357,7 @@ def quick_next_month():
     rp, rl, ru = _predict_one(rev_vals)
     bp, bl, bu = _predict_one(book_vals)
 
-    # ── FIXED: always show the actual next calendar month ──
+    # Always next calendar month from today
     next_month = _add_months(datetime.now().replace(day=1), 1)
     label      = next_month.strftime("%B %Y")
 
@@ -362,9 +386,10 @@ def internal_error(e): return jsonify({"error": "internal server error", "detail
 if __name__ == "__main__":
     port  = int(os.environ.get("FORECAST_PORT", 5002))
     debug = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
-    print(f"ARIMA Forecast Service v2  —  port {port}")
+    print(f"ARIMA Forecast Service v3  —  port {port}")
     print(f"  statsmodels : {'✓ loaded' if STATSMODELS_AVAILABLE else '✗ missing (trend fallback)'}")
     print(f"  dateutil    : {'✓ loaded' if DATEUTIL_AVAILABLE else '✗ missing (manual fallback)'}")
+    print(f"  Forecast anchor: always from CURRENT month ({datetime.now().strftime('%B %Y')})")
     print(f"  POST http://localhost:{port}/forecast/revenue")
     print(f"  POST http://localhost:{port}/forecast/bookings")
     print(f"  POST http://localhost:{port}/forecast/demand_by_type")
