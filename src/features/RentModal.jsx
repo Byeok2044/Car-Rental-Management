@@ -3,6 +3,207 @@ import Button from '../components/Commons/Button';
 import BookingCalendar from '../components/Layout/BookingCalendar';
 import './RentModal.css';
 
+// ─── Terms & Conditions Modal ─────────────────────────────────────────────────
+function TermsModal({ onClose }) {
+    return (
+        <>
+            <div
+                onClick={onClose}
+                style={{
+                    position: 'fixed', inset: 0,
+                    background: 'rgba(10,14,26,0.75)',
+                    backdropFilter: 'blur(4px)',
+                    zIndex: 1100,
+                }}
+            />
+            <div style={{
+                position: 'fixed',
+                top: '10%', left: '35%',
+                transform: 'translate(-50%, -50%)',
+                zIndex: 1101,
+                background: '#fff',
+                borderRadius: 16,
+                width: '100%',
+                maxWidth: 560,
+                maxHeight: '80vh',
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: '0 24px 64px rgba(0,0,0,0.3)',
+                overflow: 'hidden',
+                animation: 'modalIn 0.28s cubic-bezier(0.34,1.56,0.64,1) both',
+            }}>
+                {/* Header */}
+                <div style={{
+                    background: '#111827',
+                    padding: '18px 24px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexShrink: 0,
+                    position: 'relative',
+                    overflow: 'hidden',
+                }}>
+                    <div style={{
+                        position: 'absolute', top: 0, right: -40,
+                        width: 200, height: '100%',
+                        background: '#2563eb',
+                        transform: 'skewX(-14deg)',
+                        opacity: 0.15,
+                        pointerEvents: 'none',
+                    }} />
+                    <div style={{ position: 'absolute', bottom: 0, left: 24, width: 36, height: 3, background: '#ffc107', borderRadius: 2 }} />
+                    <div style={{ position: 'relative', zIndex: 1 }}>
+                        <h3 style={{ color: '#fff', margin: 0, fontSize: '1.1rem', fontWeight: 700, }}>
+                            Terms &amp; Conditions
+                        </h3>
+                        <p style={{ color: 'rgba(255,255,255,0.45)', margin: '3px 0 0', fontSize: '0.75rem' }}>
+                            Triple R and A Car Rental — Please read carefully before booking
+                        </p>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        style={{
+                            position: 'relative', zIndex: 1,
+                            background: 'rgba(255,255,255,0.1)',
+                            border: '1px solid rgba(255,255,255,0.2)',
+                            color: '#fff', width: 32, height: 32,
+                            borderRadius: '50%', cursor: 'pointer',
+                            fontSize: '1.2rem', display: 'flex',
+                            alignItems: 'center', justifyContent: 'center',
+                            lineHeight: 1, fontFamily: 'inherit',
+                            transition: 'background 0.2s, transform 0.2s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.22)'; e.currentTarget.style.transform = 'rotate(90deg)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.transform = 'rotate(0deg)'; }}
+                    >×</button>
+                </div>
+
+                {/* Scrollable body */}
+                <div style={{
+                    flex: 1, overflowY: 'auto',
+                    padding: '24px',
+                    fontSize: '0.875rem', color: '#374151', lineHeight: 1.75,
+                }}>
+                    {[
+                        {
+                            title: '1. Eligibility & Identification',
+                            body: "Renters must be at least 21 years of age and hold a valid government-issued driver's license. A secondary ID and a deposit may be required at the time of pick-up.",
+                        },
+                        {
+                            title: '2. Reservation & Payment',
+                            body: 'Bookings are confirmed only upon receipt of a quoted price from our team. Payment is accepted via Cash, GCash, or Bank Transfer. Rates are subject to change based on availability and seasonal demand.',
+                        },
+                        {
+                            title: '3. Vehicle Use',
+                            body: 'Vehicles may only be operated by the registered renter or an approved additional driver. Subletting, racing, off-road driving on unauthorized terrain, or use for commercial transport is strictly prohibited.',
+                        },
+                        {
+                            title: '4. Fuel Policy',
+                            body: 'Vehicles are provided with a full tank and must be returned with a full tank. Failure to do so will result in a refueling charge at market rates plus a service fee.',
+                        },
+                        {
+                            title: '5. Damage & Liability',
+                            body: 'The renter is liable for all damage to the vehicle during the rental period, including damage caused by third parties. Any incident must be reported to Triple R and A immediately. Do not admit liability to any third party.',
+                        },
+                        {
+                            title: '6. Cancellation Policy',
+                            body: 'Cancellations made more than 48 hours before the scheduled pick-up may be eligible for a full refund. Cancellations within 48 hours or no-shows forfeit any deposit paid.',
+                        },
+                        {
+                            title: '7. Late Returns',
+                            body: 'Vehicles returned after the agreed return time will incur additional charges at the applicable daily rate, prorated per hour. Please contact us if you anticipate a delay.',
+                        },
+                        {
+                            title: '8. Traffic & Legal Violations',
+                            body: 'All fines, penalties, tolls, and legal fees incurred during the rental period are the sole responsibility of the renter. These will be charged to the renter upon notification.',
+                        },
+                        {
+                            title: '9. Prohibited Items',
+                            body: 'Smoking, transporting illegal substances, or carrying firearms inside any rental vehicle is strictly prohibited and may result in immediate termination of the rental agreement without refund.',
+                        },
+                        {
+                            title: '10. Privacy',
+                            body: 'Personal information collected during the booking process is used solely for reservation and communication purposes. We do not sell or share your data with third parties.',
+                        },
+                    ].map((section, i) => (
+                        <div key={i} style={{ marginBottom: 18, paddingBottom: 18, borderBottom: i < 9 ? '1px solid #f1f5f9' : 'none' }}>
+                            <p style={{
+                                margin: '0 0 5px',
+                                fontWeight: 700,
+                                color: '#111827',
+                                fontSize: '0.875rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                            }}>
+                                <span style={{
+                                    width: 22, height: 22, borderRadius: 6,
+                                    background: '#eff6ff', color: '#2563eb',
+                                    fontSize: '0.7rem', fontWeight: 800,
+                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                    flexShrink: 0,
+                                }}>{i + 1}</span>
+                                {section.title.replace(/^\d+\.\s/, '')}
+                            </p>
+                            <p style={{ margin: '0 0 0 30px', color: '#4b5563', fontSize: '0.85rem' }}>{section.body}</p>
+                        </div>
+                    ))}
+
+                    <div style={{
+                        marginTop: 4,
+                        padding: '12px 14px',
+                        background: '#fffbeb',
+                        border: '1px solid #fde68a',
+                        borderRadius: 8,
+                        fontSize: '0.82rem',
+                        color: '#92400e',
+                        fontWeight: 500,
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 8,
+                    }}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                            <line x1="12" y1="9" x2="12" y2="13"/>
+                            <line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
+                        By checking the box in the booking form, you confirm that you have read, understood, and agree to all Terms &amp; Conditions above.
+                    </div>
+                </div>
+
+                <div style={{
+                    padding: '14px 24px',
+                    borderTop: '1px solid #f1f5f9',
+                    background: '#f8fafc',
+                    flexShrink: 0,
+                }}>
+                    <button
+                        onClick={onClose}
+                        style={{
+                            width: '100%',
+                            padding: '10px',
+                            background: '#2563eb',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: 8,
+                            fontWeight: 700,
+                            fontSize: '0.9rem',
+                            cursor: 'pointer',
+                            fontFamily: 'inherit',
+                            transition: 'background 0.2s',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#1d4ed8'}
+                        onMouseLeave={e => e.currentTarget.style.background = '#2563eb'}
+                    >
+                        I've Read the Terms
+                    </button>
+                </div>
+            </div>
+        </>
+    );
+}
+
+// ─── Location Picker ──────────────────────────────────────────────────────────
 const LOCATION_GROUPS = [
     {
         group: 'Metro Manila',
@@ -68,15 +269,6 @@ function ChevronIcon({ open }) {
             stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
             style={{ transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}>
             <polyline points="6 9 12 15 18 9"/>
-        </svg>
-    );
-}
-
-function PlusIcon() {
-    return (
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
     );
 }
@@ -237,24 +429,18 @@ function LocationPicker({ value, onChange, disabled }) {
     );
 }
 
+// ─── Cart Item ────────────────────────────────────────────────────────────────
 function CartItem({ item, allCars, onUpdate, onRemove, index }) {
     const [calOpen, setCalOpen] = useState(index === 0);
 
     const maxQty = item.car.stock;
 
     function handleDateChange({ start, end }) {
-        function toLocalDateStr(date) {
-            const y = date.getFullYear();
-            const m = String(date.getMonth() + 1).padStart(2, '0');
-            const d = String(date.getDate()).padStart(2, '0');
-            return `${y}-${m}-${d}`;
-        }
-
         if (start && end) {
             const days = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
-            onUpdate({ pickupDate: toLocalDateStr(start), rentalDays: days });
+            onUpdate({ pickupDate: start.toISOString().split('T')[0], rentalDays: days });
         } else if (start) {
-            onUpdate({ pickupDate: toLocalDateStr(start), rentalDays: 1 });
+            onUpdate({ pickupDate: start.toISOString().split('T')[0], rentalDays: 1 });
         } else {
             onUpdate({ pickupDate: '', rentalDays: 1 });
         }
@@ -315,121 +501,13 @@ function CartItem({ item, allCars, onUpdate, onRemove, index }) {
     );
 }
 
-// ── AddVehiclePanel supports two display modes:
-//    - default: dashed border block below cart (legacy)
-//    - inline:  compact button shown in the section header
-function AddVehiclePanel({ allCars, cartCarIds, onAdd, inline = false }) {
+// ─── Add Vehicle Panel ────────────────────────────────────────────────────────
+function AddVehiclePanel({ allCars, cartCarIds, onAdd }) {
     const [open, setOpen] = useState(false);
-    const wrapRef = useRef(null);
     const available = allCars.filter(c => c.stock > 0 && !cartCarIds.includes(c._id));
-
-    // Close dropdown when clicking outside
-    useEffect(() => {
-        function handleClick(e) {
-            if (wrapRef.current && !wrapRef.current.contains(e.target)) {
-                setOpen(false);
-            }
-        }
-        document.addEventListener('mousedown', handleClick);
-        return () => document.removeEventListener('mousedown', handleClick);
-    }, []);
 
     if (available.length === 0) return null;
 
-    if (inline) {
-        return (
-            <div ref={wrapRef} style={{ position: 'relative' }}>
-                <button
-                    type="button"
-                    onClick={() => setOpen(v => !v)}
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 5,
-                        padding: '5px 12px',
-                        background: open ? '#eff6ff' : '#f8fafc',
-                        border: `1.5px solid ${open ? '#bfdbfe' : '#e2e8f0'}`,
-                        borderRadius: 8,
-                        cursor: 'pointer',
-                        fontSize: '0.78rem',
-                        fontWeight: 600,
-                        color: open ? 'var(--primary-blue)' : '#475569',
-                        fontFamily: 'inherit',
-                        transition: 'all 0.15s',
-                        whiteSpace: 'nowrap',
-                    }}
-                >
-                    <PlusIcon />
-                    Add vehicle
-                    <ChevronIcon open={open} />
-                </button>
-
-                {open && (
-                    <div style={{
-                        position: 'absolute',
-                        top: 'calc(100% + 6px)',
-                        right: 0,
-                        zIndex: 50,
-                        background: '#fff',
-                        border: '1.5px solid #bfdbfe',
-                        borderRadius: 10,
-                        boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-                        minWidth: 240,
-                        maxHeight: 240,
-                        overflowY: 'auto',
-                        padding: '6px 0',
-                        animation: 'lpDrop 0.16s cubic-bezier(0.4,0,0.2,1) both',
-                    }}>
-                        {available.map(car => (
-                            <button
-                                key={car._id}
-                                type="button"
-                                onClick={() => { onAdd(car); setOpen(false); }}
-                                style={{
-                                    width: '100%',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 10,
-                                    padding: '9px 14px',
-                                    border: 'none',
-                                    background: 'transparent',
-                                    fontFamily: 'inherit',
-                                    fontSize: '0.85rem',
-                                    textAlign: 'left',
-                                    cursor: 'pointer',
-                                    borderBottom: '1px solid #f9fafb',
-                                    transition: 'background 0.12s',
-                                }}
-                                onMouseEnter={e => e.currentTarget.style.background = '#eff6ff'}
-                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                            >
-                                <img src={car.image} alt={car.title} style={{
-                                    width: 44, height: 30, borderRadius: 5,
-                                    objectFit: 'cover', flexShrink: 0,
-                                    border: '1px solid #e2e8f0',
-                                }} />
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <span style={{ display: 'block', fontWeight: 600, color: '#111827', fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                        {car.title}
-                                    </span>
-                                    <span style={{ display: 'block', fontSize: '0.72rem', color: '#9ca3af', marginTop: 1 }}>
-                                        {car.type} · {car.stock} available
-                                    </span>
-                                </div>
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                                    stroke="var(--primary-blue)" strokeWidth="2.5"
-                                    strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                                </svg>
-                            </button>
-                        ))}
-                    </div>
-                )}
-            </div>
-        );
-    }
-
-    // Legacy block mode (kept for backwards compatibility)
     return (
         <div className="add-vehicle">
             <button type="button" className="add-vehicle__trigger" onClick={() => setOpen(v => !v)}>
@@ -464,9 +542,7 @@ function AddVehiclePanel({ allCars, cartCarIds, onAdd, inline = false }) {
     );
 }
 
-// Regex: letters (including accented), spaces, hyphens, apostrophes, and periods
-const NAME_REGEX = /^[a-zA-ZÀ-ÖØ-öø-ÿ\s\-'.]+$/;
-
+// ─── Main Modal ───────────────────────────────────────────────────────────────
 function RentModal({ car, allCars = [], onClose, onConfirm }) {
     const [customer, setCustomer] = useState({
         fullName: '',
@@ -482,7 +558,10 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
         pickupLocation: '',
     }]);
 
-    const [submitting, setSubmitting] = useState(false);
+    const [agreedToTerms,  setAgreedToTerms]  = useState(false);
+    const [showTermsModal, setShowTermsModal] = useState(false);
+    const [termsError,     setTermsError]     = useState(false);
+    const [submitting,     setSubmitting]      = useState(false);
 
     const updateItem = useCallback((index, patch) => {
         setCart(prev => prev.map((item, i) => i === index ? { ...item, ...patch } : item));
@@ -510,15 +589,8 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
     }, 0);
     const totalVehicles = cart.reduce((sum, i) => sum + i.qty, 0);
 
-    const isNameValid = customer.fullName.length === 0 || NAME_REGEX.test(customer.fullName);
-
     const handleSubmit = async (e) => {
         e.preventDefault();
-
-        if (!NAME_REGEX.test(customer.fullName)) {
-            alert('Please enter a valid name (letters, spaces, hyphens, and apostrophes only).');
-            return;
-        }
 
         for (let i = 0; i < cart.length; i++) {
             const item = cart[i];
@@ -532,6 +604,13 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
             }
         }
 
+        if (!agreedToTerms) {
+            setTermsError(true);
+            // Scroll the terms checkbox into view
+            document.getElementById('terms-checkbox-area')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+        }
+
         setSubmitting(true);
         try {
             const bookings = cart.map(item => ({
@@ -540,9 +619,9 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
                 customerName:   customer.fullName,
                 customerEmail:  customer.email,
                 customerPhone:  customer.phone,
-                startDate:      new Date(`${item.pickupDate}T00:00:00`).toISOString(),
+                startDate:      new Date(item.pickupDate).toISOString(),
                 endDate:        (() => {
-                    const d = new Date(`${item.pickupDate}T00:00:00`);
+                    const d = new Date(item.pickupDate);
                     d.setDate(d.getDate() + item.rentalDays - 1);
                     return d.toISOString();
                 })(),
@@ -557,92 +636,199 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
     };
 
     return (
-        <div className="modal-overlay">
-            <div className="modal-content booking-modal booking-modal--wide">
-                <div className="modal-header">
-                    <div>
-                        <h2>Book Your Vehicles</h2>
-                        <p className="modal-header__sub">
-                            {totalVehicles} vehicle{totalVehicles !== 1 ? 's' : ''} · {cart.length} type{cart.length !== 1 ? 's' : ''}
-                        </p>
-                    </div>
-                    <button className="close-x" onClick={onClose} disabled={submitting}>&times;</button>
-                </div>
+        <>
+            {showTermsModal && <TermsModal onClose={() => setShowTermsModal(false)} />}
 
-                <div className="modal-body-split">
-                    <div className="modal-left">
-                        {/* Section header with inline Add Vehicle button */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <p className="modal-section-label" style={{ margin: 0 }}>Your Selection</p>
+            <div className="modal-overlay">
+                <div className="modal-content booking-modal booking-modal--wide">
+                    <div className="modal-header">
+                        <div>
+                            <h2>Book Your Vehicles</h2>
+                            <p className="modal-header__sub">
+                                {totalVehicles} vehicle{totalVehicles !== 1 ? 's' : ''} · {cart.length} type{cart.length !== 1 ? 's' : ''}
+                            </p>
+                        </div>
+                        <button className="close-x" onClick={onClose} disabled={submitting}>&times;</button>
+                    </div>
+
+                    <div className="modal-body-split">
+                        {/* LEFT: Cart */}
+                        <div className="modal-left">
+                            <p className="modal-section-label">Your Selection</p>
+
+                            <div className="cart-list">
+                                {cart.map((item, i) => (
+                                    <CartItem
+                                        key={item.car._id}
+                                        item={item}
+                                        allCars={allCars}
+                                        index={i}
+                                        onUpdate={(patch) => updateItem(i, patch)}
+                                        onRemove={() => removeItem(i)}
+                                    />
+                                ))}
+                            </div>
+
                             <AddVehiclePanel
                                 allCars={allCars}
                                 cartCarIds={cartCarIds}
                                 onAdd={addVehicle}
-                                inline
                             />
-                        </div>
 
-                        <div className="cart-list">
-                            {cart.map((item, i) => (
-                                <CartItem
-                                    key={item.car._id}
-                                    item={item}
-                                    allCars={allCars}
-                                    index={i}
-                                    onUpdate={(patch) => updateItem(i, patch)}
-                                    onRemove={() => removeItem(i)}
-                                />
-                            ))}
-                        </div>
+                            {/* ── Terms & Conditions checkbox ── */}
+                            <div
+                                id="terms-checkbox-area"
+                                style={{
+                                    background: termsError ? '#fef2f2' : agreedToTerms ? '#f0fdf4' : '#f8fafc',
+                                    border: `1.5px solid ${termsError ? '#fca5a5' : agreedToTerms ? '#bbf7d0' : '#e2e8f0'}`,
+                                    borderRadius: 10,
+                                    padding: '14px 16px',
+                                    transition: 'all 0.2s',
+                                }}
+                            >
+                                <label style={{
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: 12,
+                                    cursor: 'pointer',
+                                    userSelect: 'none',
+                                }}>
+                                    {/* Custom checkbox */}
+                                    <div
+                                        onClick={() => {
+                                            setAgreedToTerms(v => !v);
+                                            setTermsError(false);
+                                        }}
+                                        style={{
+                                            width: 20,
+                                            height: 20,
+                                            borderRadius: 5,
+                                            border: `2px solid ${termsError ? '#ef4444' : agreedToTerms ? '#16a34a' : '#d1d5db'}`,
+                                            background: agreedToTerms ? '#16a34a' : '#fff',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            flexShrink: 0,
+                                            marginTop: 1,
+                                            transition: 'all 0.18s',
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        {agreedToTerms && (
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                <polyline points="20 6 9 17 4 12"/>
+                                            </svg>
+                                        )}
+                                    </div>
 
-                        <div className="order-summary">
-                            <p className="order-summary__label">Order Summary</p>
-                            {cart.map(item => (
-                                <div key={item.car._id} className="order-summary__row">
-                                    <span>{item.car.title} × {item.qty} · {item.rentalDays}d</span>
-                                    <span>
-                                        {item.car.dailyRate
-                                            ? `₱${(item.car.dailyRate * item.qty * item.rentalDays).toLocaleString()}`
-                                            : '—'}
-                                    </span>
-                                </div>
-                            ))}
-                            {totalCost > 0 && (
-                                <div className="order-summary__total">
-                                    <span>Total</span>
-                                    <span>₱{totalCost.toLocaleString()}</span>
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                                    <div style={{ flex: 1 }}>
+                                        <p style={{
+                                            margin: 0,
+                                            fontSize: '0.85rem',
+                                            color: termsError ? '#b91c1c' : '#374151',
+                                            fontWeight: 500,
+                                            lineHeight: 1.5,
+                                        }}>
+                                            I have read and agree to the{' '}
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    setShowTermsModal(true);
+                                                }}
+                                                style={{
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    padding: 0,
+                                                    color: '#2563eb',
+                                                    fontWeight: 700,
+                                                    fontSize: '0.85rem',
+                                                    cursor: 'pointer',
+                                                    textDecoration: 'underline',
+                                                    fontFamily: 'inherit',
+                                                    textUnderlineOffset: 2,
+                                                }}
+                                            >
+                                                Terms &amp; Conditions
+                                            </button>
+                                            {' '}of Triple R and A Car Rental.
+                                        </p>
 
-                    <div className="modal-right">
-                        <p className="modal-section-label">Your Details</p>
+                                        {termsError && (
+                                            <p style={{
+                                                margin: '5px 0 0',
+                                                fontSize: '0.78rem',
+                                                color: '#ef4444',
+                                                fontWeight: 600,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 4,
+                                            }}>
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                    <circle cx="12" cy="12" r="10"/>
+                                                    <line x1="12" y1="8" x2="12" y2="12"/>
+                                                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                                                </svg>
+                                                You must agree to the Terms &amp; Conditions to proceed.
+                                            </p>
+                                        )}
 
-                        <form onSubmit={handleSubmit} className="rental-form">
-                            <div className="form-group">
-                                <label>Full Name</label>
-                                <input
-                                    type="text"
-                                    required
-                                    placeholder="Juan Dela Cruz"
-                                    value={customer.fullName}
-                                    onChange={e => {
-                                        const raw = e.target.value.replace(/[^a-zA-ZÀ-ÖØ-öø-ÿ\s\-'.]/g, '');
-                                        setCustomer(p => ({ ...p, fullName: raw }));
-                                    }}
-                                    pattern="^[a-zA-ZÀ-ÖØ-öø-ÿ\s\-'.]+$"
-                                    title="Name may only contain letters, spaces, hyphens, and apostrophes"
-                                    disabled={submitting}
-                                />
-                                {!isNameValid && (
-                                    <span className="field-error">
-                                        Name may only contain letters, spaces, hyphens, and apostrophes
-                                    </span>
-                                )}
+                                        {agreedToTerms && (
+                                            <p style={{
+                                                margin: '5px 0 0',
+                                                fontSize: '0.78rem',
+                                                color: '#16a34a',
+                                                fontWeight: 600,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 4,
+                                            }}>
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                    <polyline points="20 6 9 17 4 12"/>
+                                                </svg>
+                                                Terms agreed — you're good to go!
+                                            </p>
+                                        )}
+                                    </div>
+                                </label>
                             </div>
 
-                            <div className="form-group">
+                            {/* ── Order Summary ── */}
+                            <div className="order-summary">
+                                <p className="order-summary__label">Order Summary</p>
+                                {cart.map(item => (
+                                    <div key={item.car._id} className="order-summary__row">
+                                        <span>{item.car.title} × {item.qty} · {item.rentalDays}d</span>
+                                        <span>
+                                            {item.car.dailyRate
+                                                ? `₱${(item.car.dailyRate * item.qty * item.rentalDays).toLocaleString()}`
+                                                : '—'}
+                                        </span>
+                                    </div>
+                                ))}
+                                {totalCost > 0 && (
+                                    <div className="order-summary__total">
+                                        <span>Total</span>
+                                        <span>₱{totalCost.toLocaleString()}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* RIGHT: Customer details */}
+                        <div className="modal-right">
+                            <p className="modal-section-label">Your Details</p>
+
+                            <form onSubmit={handleSubmit} className="rental-form">
+                                <div className="form-group">
+                                    <label>Full Name</label>
+                                    <input type="text" required placeholder="Juan Dela Cruz"
+                                        value={customer.fullName}
+                                        onChange={e => setCustomer(p => ({ ...p, fullName: e.target.value }))}
+                                        disabled={submitting} />
+                                </div>
+
+                                 <div className="form-group">
                                 <label>Phone Number</label>
                                 <input type="tel" required placeholder="0912 345 6789"
                                     value={customer.phone}
@@ -660,27 +846,32 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
                                 )}
                             </div>
 
-                            <div className="form-group">
-                                <label>Email Address</label>
-                                <input type="email" required placeholder="juan@example.com"
-                                    value={customer.email}
-                                    onChange={e => setCustomer(p => ({ ...p, email: e.target.value }))}
-                                    disabled={submitting} />
-                            </div>
+                                <div className="form-group">
+                                    <label>Email Address</label>
+                                    <input type="email" required placeholder="juan@example.com"
+                                        value={customer.email}
+                                        onChange={e => setCustomer(p => ({ ...p, email: e.target.value }))}
+                                        disabled={submitting} />
+                                </div>
 
-                            <div className="modal-actions">
-                                <button type="button" className="cancel-btn" onClick={onClose} disabled={submitting}>
-                                    Cancel
-                                </button>
-                                <Button type="submit" className="confirm-btn" disabled={submitting || cart.length === 0}>
-                                    {submitting ? 'Confirming…' : `Confirm ${totalVehicles} Vehicle${totalVehicles !== 1 ? 's' : ''}`}
-                                </Button>
-                            </div>
-                        </form>
+                                <div className="modal-actions">
+                                    <button type="button" className="cancel-btn" onClick={onClose} disabled={submitting}>
+                                        Cancel
+                                    </button>
+                                    <Button
+                                        type="submit"
+                                        className="confirm-btn"
+                                        disabled={submitting || cart.length === 0}
+                                    >
+                                        {submitting ? 'Confirming…' : `Confirm ${totalVehicles} Vehicle${totalVehicles !== 1 ? 's' : ''}`}
+                                    </Button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </>
     );
 }
 
