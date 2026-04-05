@@ -287,7 +287,7 @@ export default function ProfileModal({ isOpen, onClose, onProfileSaved, currentC
                                             Saving…
                                         </>
                                     ) : success ? (
-                                        <>Saved!</>
+                                        <>Saved</>
                                     ) : (
                                         <>Save Changes</>
                                     )}
