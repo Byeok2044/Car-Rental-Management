@@ -421,7 +421,7 @@ function LocationPicker({ value, onChange, disabled }) {
                                     );
                                 })}
                             </div>
-                        ))}
+                        ))}         
                     </div>
                 </div>
             )}
@@ -430,7 +430,7 @@ function LocationPicker({ value, onChange, disabled }) {
 }
 
 // ─── Cart Item ────────────────────────────────────────────────────────────────
-function CartItem({ item, allCars, onUpdate, onRemove, index }) {
+function CartItem({ item, allCars, onUpdate, onRemove, index, error }) {
     const [calOpen, setCalOpen] = useState(index === 0);
 
     const maxQty = item.car.stock;
@@ -483,10 +483,18 @@ function CartItem({ item, allCars, onUpdate, onRemove, index }) {
             </button>
 
             {calOpen && (
-                <div className="cart-item__details">
+                <div className="cart-item__details" style={{
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    gap: '15px'
+                }}>
                     <div className="cart-item__cal">
                         <p className="cart-item__section-label">Rental Dates</p>
-                        <BookingCalendar onDateSelect={handleDateChange} />
+                        <BookingCalendar 
+                            onDateSelect={handleDateChange}
+                            savedStartDate={item.pickupDate} 
+                            savedDays={item.rentalDays}
+                         />
                     </div>
                     <div className="cart-item__loc">
                         <p className="cart-item__section-label">Pickup Location</p>
@@ -495,6 +503,27 @@ function CartItem({ item, allCars, onUpdate, onRemove, index }) {
                             onChange={(id) => onUpdate({ pickupLocation: id })}
                         />
                     </div>
+
+                    {error && (
+                        <div style={{
+                            marginTop: '5px',
+                            padding: '10px 12px',
+                            background: '#fff1f2',
+                            borderRadius: '6px',
+                            color: '#9f1239',
+                            fontSize: '0.85rem',
+                            fontWeight: '600',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            position: 'relative',
+                            zIndex: 1,
+                            clear: 'both'
+                        }}>
+                            <span>{error}</span>
+                        </div>
+                    )}
+
                 </div>
             )}
         </div>
@@ -520,7 +549,19 @@ function AddVehiclePanel({ allCars, cartCarIds, onAdd }) {
             </button>
 
             {open && (
-                <div className="add-vehicle__list">
+                <div className="add-vehicle__list" style={{ 
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    width: '100%',
+                    zIndex: 9999, // Ensure it's above everything else
+                    background: 'white',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                    maxHeight: '300px',
+                    overflowY: 'auto',
+                    borderRadius: '8px',
+                    marginTop: '8px'
+                }}>
                     {available.map(car => (
                         <button key={car._id} type="button" className="add-vehicle__option"
                             onClick={() => { onAdd(car); setOpen(false); }}>
@@ -589,26 +630,35 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
     }, 0);
     const totalVehicles = cart.reduce((sum, i) => sum + i.qty, 0);
 
+    const [errorMap, setErrorMap] = useState({});
+    const [submitted, setSubmitted] = useState(false);
+
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setErrorMap({});
 
-        for (let i = 0; i < cart.length; i++) {
-            const item = cart[i];
-            if (!item.pickupDate) {
-                alert(`Please select rental dates for: ${item.car.title}`);
-                return;
+        const newErrors = {}
+
+        cart.forEach(item => {
+        const missing = [];
+        if (!item.pickupDate) missing.push("date");
+        if (!item.pickupLocation) missing.push("pickup location");
+
+            if (missing.length > 0) {
+                newErrors[item.car._id] = `Please select a ${missing.join(" and ")}.`;
             }
-            if (!item.pickupLocation) {
-                alert(`Please select a pickup location for: ${item.car.title}`);
-                return;
-            }
+        });
+
+        if (Object.keys(newErrors).length > 0) {
+            setErrorMap(newErrors);
+            return;
         }
 
         if (!agreedToTerms) {
-            setTermsError(true);
-            // Scroll the terms checkbox into view
-            document.getElementById('terms-checkbox-area')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            return;
+                    setTermsError(true);
+                    // Scroll the terms checkbox into view
+                    document.getElementById('terms-checkbox-area')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return;
         }
 
         setSubmitting(true);
@@ -630,6 +680,10 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
             }));
 
             await onConfirm(bookings);
+            setSubmitted(true); 
+
+        } catch (err) {
+            console.error("Booking failed", err);
         } finally {
             setSubmitting(false);
         }
@@ -643,231 +697,281 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
                 <div className="modal-content booking-modal booking-modal--wide">
                     <div className="modal-header">
                         <div>
+                            {submitted ? (
+                                /* --- HEADER AFTER SUBMISSION --- */
+                                <>
+                                    <h2>Booking Confirmed</h2>
+                                    <p className="modal-header__sub">
+                                        {totalVehicles} vehicle{totalVehicles !== 1 ? 's' : ''} · {cart.length} type{cart.length !== 1 ? 's' : ''}
+                                    </p>
+                                </>
+                            ) : (
+                            <>
                             <h2>Book Your Vehicles</h2>
                             <p className="modal-header__sub">
                                 {totalVehicles} vehicle{totalVehicles !== 1 ? 's' : ''} · {cart.length} type{cart.length !== 1 ? 's' : ''}
                             </p>
+                            </>
+                            )}
                         </div>
                         <button className="close-x" onClick={onClose} disabled={submitting}>&times;</button>
                     </div>
 
                     <div className="modal-body-split">
-                        {/* LEFT: Cart */}
-                        <div className="modal-left">
-                            <p className="modal-section-label">Your Selection</p>
-
-                            <div className="cart-list">
-                                {cart.map((item, i) => (
-                                    <CartItem
-                                        key={item.car._id}
-                                        item={item}
-                                        allCars={allCars}
-                                        index={i}
-                                        onUpdate={(patch) => updateItem(i, patch)}
-                                        onRemove={() => removeItem(i)}
-                                    />
-                                ))}
+                        {submitted ? (
+                            <div className="success-box" style={{ 
+                                gridColumn: '1 / -1',
+                                width: '100%', 
+                                padding: '60px 20px', 
+                                textAlign: 'center',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center'
+                            }}>
+                                <h2 style={{ color: 'black', marginBottom: '10px' }}>Thank You!</h2>
+                                <p style={{ fontSize: '1.1rem', marginBottom: '25px' }}>
+                                    Your booking request has been received.
+                                </p>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    <Button onClick={() => {
+                                        setSubmitted(false);
+                                        setCart([]);
+                                        setErrorMap({});
+                                        setTermsError(false);
+                                        setAgreedToTerms(false)
+                                        setCustomer({
+                                            fullName: '',
+                                            phone:    '',
+                                            email:    '',
+                                        });
+                                    }}>
+                                        Book Another
+                                    </Button>
+                                    <button className="cancel-btn" onClick={onClose}>Close Window</button>
+                                </div>
                             </div>
+                        ) : (
+                        <>
+                            <div className="modal-left">
+                                <p className="modal-section-label">Your Selection</p>
 
-                            <AddVehiclePanel
-                                allCars={allCars}
-                                cartCarIds={cartCarIds}
-                                onAdd={addVehicle}
-                            />
+                                <div className="cart-list">
+                                    {cart.map((item, i) => (
+                                        <CartItem
+                                            key={item.car._id}
+                                            item={item}
+                                            allCars={allCars}
+                                            index={i}
+                                            onUpdate={(patch) => updateItem(i, patch)}
+                                            onRemove={() => removeItem(i)}
+                                            error={errorMap[item.car._id]}
+                                        />
+                                    ))}
+                                </div>
 
-                            {/* ── Terms & Conditions checkbox ── */}
-                            <div
-                                id="terms-checkbox-area"
-                                style={{
-                                    background: termsError ? '#fef2f2' : agreedToTerms ? '#f0fdf4' : '#f8fafc',
-                                    border: `1.5px solid ${termsError ? '#fca5a5' : agreedToTerms ? '#bbf7d0' : '#e2e8f0'}`,
-                                    borderRadius: 10,
-                                    padding: '14px 16px',
-                                    transition: 'all 0.2s',
-                                }}
-                            >
-                                <label style={{
-                                    display: 'flex',
-                                    alignItems: 'flex-start',
-                                    gap: 12,
-                                    cursor: 'pointer',
-                                    userSelect: 'none',
-                                }}>
-                                    {/* Custom checkbox */}
-                                    <div
-                                        onClick={() => {
-                                            setAgreedToTerms(v => !v);
-                                            setTermsError(false);
-                                        }}
-                                        style={{
-                                            width: 20,
-                                            height: 20,
-                                            borderRadius: 5,
-                                            border: `2px solid ${termsError ? '#ef4444' : agreedToTerms ? '#16a34a' : '#d1d5db'}`,
-                                            background: agreedToTerms ? '#16a34a' : '#fff',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            flexShrink: 0,
-                                            marginTop: 1,
-                                            transition: 'all 0.18s',
-                                            cursor: 'pointer',
-                                        }}
-                                    >
-                                        {agreedToTerms && (
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                                <polyline points="20 6 9 17 4 12"/>
-                                            </svg>
-                                        )}
-                                    </div>
+                                <div style={{ position: 'relative', zIndex: 50, marginTop: '3px' }}>
+                                    <AddVehiclePanel
+                                    allCars={allCars}
+                                    cartCarIds={cartCarIds}
+                                    onAdd={addVehicle}
+                                    />
+                                </div>
+                                
 
-                                    <div style={{ flex: 1 }}>
-                                        <p style={{
-                                            margin: 0,
-                                            fontSize: '0.85rem',
-                                            color: termsError ? '#b91c1c' : '#374151',
-                                            fontWeight: 500,
-                                            lineHeight: 1.5,
-                                        }}>
-                                            I have read and agree to the{' '}
-                                            <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    setShowTermsModal(true);
-                                                }}
-                                                style={{
-                                                    background: 'none',
-                                                    border: 'none',
-                                                    padding: 0,
-                                                    color: '#2563eb',
-                                                    fontWeight: 700,
-                                                    fontSize: '0.85rem',
-                                                    cursor: 'pointer',
-                                                    textDecoration: 'underline',
-                                                    fontFamily: 'inherit',
-                                                    textUnderlineOffset: 2,
-                                                }}
-                                            >
-                                                Terms &amp; Conditions
-                                            </button>
-                                            {' '}of Triple R and A Car Rental.
-                                        </p>
-
-                                        {termsError && (
-                                            <p style={{
-                                                margin: '5px 0 0',
-                                                fontSize: '0.78rem',
-                                                color: '#ef4444',
-                                                fontWeight: 600,
+                                {/* ── Terms & Conditions checkbox ── */}
+                                <div
+                                    id="terms-checkbox-area"
+                                    style={{
+                                        background: termsError ? '#fef2f2' : agreedToTerms ? '#f0fdf4' : '#f8fafc',
+                                        border: `1.5px solid ${termsError ? '#fca5a5' : agreedToTerms ? '#bbf7d0' : '#e2e8f0'}`,
+                                        borderRadius: 10,
+                                        padding: '14px 16px',
+                                        transition: 'all 0.2s',
+                                    }}
+                                >
+                                    <label style={{
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: 12,
+                                        cursor: 'pointer',
+                                        userSelect: 'none',
+                                    }}>
+                                        {/* Custom checkbox */}
+                                        <div
+                                            onClick={() => {
+                                                setAgreedToTerms(v => !v);
+                                                setTermsError(false);
+                                            }}
+                                            style={{
+                                                width: 20,
+                                                height: 20,
+                                                borderRadius: 5,
+                                                border: `2px solid ${termsError ? '#ef4444' : agreedToTerms ? '#16a34a' : '#d1d5db'}`,
+                                                background: agreedToTerms ? '#16a34a' : '#fff',
                                                 display: 'flex',
                                                 alignItems: 'center',
-                                                gap: 4,
-                                            }}>
-                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                    <circle cx="12" cy="12" r="10"/>
-                                                    <line x1="12" y1="8" x2="12" y2="12"/>
-                                                    <line x1="12" y1="16" x2="12.01" y2="16"/>
-                                                </svg>
-                                                You must agree to the Terms &amp; Conditions to proceed.
-                                            </p>
-                                        )}
-
-                                        {agreedToTerms && (
-                                            <p style={{
-                                                margin: '5px 0 0',
-                                                fontSize: '0.78rem',
-                                                color: '#16a34a',
-                                                fontWeight: 600,
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: 4,
-                                            }}>
-                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                justifyContent: 'center',
+                                                flexShrink: 0,
+                                                marginTop: 1,
+                                                transition: 'all 0.18s',
+                                                cursor: 'pointer',
+                                            }}
+                                        >
+                                            {agreedToTerms && (
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                                                     <polyline points="20 6 9 17 4 12"/>
                                                 </svg>
-                                                Terms agreed — you're good to go!
+                                            )}
+                                        </div>
+
+                                        <div style={{ flex: 1 }}>
+                                            <p style={{
+                                                margin: 0,
+                                                fontSize: '0.85rem',
+                                                color: termsError ? '#b91c1c' : '#374151',
+                                                fontWeight: 500,
+                                                lineHeight: 1.5,
+                                            }}>
+                                                I have read and agree to the{' '}
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        setShowTermsModal(true);
+                                                    }}
+                                                    style={{
+                                                        background: 'none',
+                                                        border: 'none',
+                                                        padding: 0,
+                                                        color: '#2563eb',
+                                                        fontWeight: 700,
+                                                        fontSize: '0.85rem',
+                                                        cursor: 'pointer',
+                                                        textDecoration: 'underline',
+                                                        fontFamily: 'inherit',
+                                                        textUnderlineOffset: 2,
+                                                    }}
+                                                >
+                                                    Terms &amp; Conditions
+                                                </button>
+                                                {' '}of Triple R and A Car Rental.
                                             </p>
-                                        )}
-                                    </div>
-                                </label>
-                            </div>
 
-                            {/* ── Order Summary ── */}
-                            <div className="order-summary">
-                                <p className="order-summary__label">Order Summary</p>
-                                {cart.map(item => (
-                                    <div key={item.car._id} className="order-summary__row">
-                                        <span>{item.car.title} × {item.qty} · {item.rentalDays}d</span>
-                                        <span>
-                                            {item.car.dailyRate
-                                                ? `₱${(item.car.dailyRate * item.qty * item.rentalDays).toLocaleString()}`
-                                                : '—'}
+                                            {termsError && (
+                                                <p style={{
+                                                    margin: '5px 0 0',
+                                                    fontSize: '0.78rem',
+                                                    color: '#ef4444',
+                                                    fontWeight: 600,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: 4,
+                                                }}>
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                        <circle cx="12" cy="12" r="10"/>
+                                                        <line x1="12" y1="8" x2="12" y2="12"/>
+                                                        <line x1="12" y1="16" x2="12.01" y2="16"/>
+                                                    </svg>
+                                                    You must agree to the Terms &amp; Conditions to proceed.
+                                                </p>
+                                            )}
+
+                                            {agreedToTerms && (
+                                                <p style={{
+                                                    margin: '5px 0 0',
+                                                    fontSize: '0.78rem',
+                                                    color: '#16a34a',
+                                                    fontWeight: 600,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: 4,
+                                                }}>
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                        <polyline points="20 6 9 17 4 12"/>
+                                                    </svg>
+                                                    Terms agreed — you're good to go!
+                                                </p>
+                                            )}
+                                        </div>
+                                    </label>
+                                </div>
+
+                                {/* ── Order Summary ── */}
+                                <div className="order-summary">
+                                    <p className="order-summary__label">Order Summary</p>
+                                    {cart.map(item => (
+                                        <div key={item.car._id} className="order-summary__row">
+                                            <span>{item.car.title} × {item.qty} · {item.rentalDays}d</span>
+                                            <span>
+                                                {item.car.dailyRate
+                                                    ? `₱${(item.car.dailyRate * item.qty * item.rentalDays).toLocaleString()}`
+                                                    : '—'}
+                                            </span>
+                                        </div>
+                                    ))}
+                                    {totalCost > 0 && (
+                                        <div className="order-summary__total">
+                                            <span>Total</span>
+                                            <span>₱{totalCost.toLocaleString()}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            
+                            <div className="modal-right">
+
+                                <form onSubmit={handleSubmit} className="rental-form">
+                                    <p className="modal-section-label">Your Details</p>
+                                    <div className="form-group">
+                                        <label>Full Name</label>
+                                        <input type="text" required placeholder="Juan Dela Cruz"
+                                            value={customer.fullName}
+                                            onChange={e => setCustomer(p => ({ ...p, fullName: e.target.value }))}
+                                            disabled={submitting} />
+                                    </div>
+
+                                    <div className="form-group">
+                                    <label>Phone Number</label>
+                                    <input type="tel" required placeholder="0912 345 6789"
+                                        value={customer.phone}
+                                        onChange={e => {
+                                            const raw = e.target.value.replace(/\D/g, '').slice(0, 11);
+                                            setCustomer(p => ({ ...p, phone: raw }));
+                                        }}
+                                        pattern="^(09\d{9}|(\+63)9\d{9})$"
+                                        title="Enter a valid Philippine mobile number (e.g. 09123456789)"
+                                        disabled={submitting} />
+                                    {customer.phone.length > 0 && !/^09\d{9}$/.test(customer.phone) && (
+                                        <span className="field-error">
+                                            Must be 11 digits starting with 09 (e.g. 09123456789)
                                         </span>
+                                    )}
+                                </div>
+
+                                    <div className="form-group">
+                                        <label>Email Address</label>
+                                        <input type="email" required placeholder="juan@example.com"
+                                            value={customer.email}
+                                            onChange={e => setCustomer(p => ({ ...p, email: e.target.value }))}
+                                            disabled={submitting} />
                                     </div>
-                                ))}
-                                {totalCost > 0 && (
-                                    <div className="order-summary__total">
-                                        <span>Total</span>
-                                        <span>₱{totalCost.toLocaleString()}</span>
+
+                                    <div className="modal-actions">
+                                        <button type="button" className="cancel-btn" onClick={onClose} disabled={submitting}>
+                                            Cancel
+                                        </button>
+                                        <Button
+                                            type="submit"
+                                            className="confirm-btn"
+                                            disabled={submitting || cart.length === 0}
+                                        >
+                                            {submitting ? 'Confirming…' : `Confirm ${totalVehicles} Vehicle${totalVehicles !== 1 ? 's' : ''}`}
+                                        </Button>
                                     </div>
-                                )}
+                                </form>
                             </div>
-                        </div>
-
-                        {/* RIGHT: Customer details */}
-                        <div className="modal-right">
-                            <p className="modal-section-label">Your Details</p>
-
-                            <form onSubmit={handleSubmit} className="rental-form">
-                                <div className="form-group">
-                                    <label>Full Name</label>
-                                    <input type="text" required placeholder="Juan Dela Cruz"
-                                        value={customer.fullName}
-                                        onChange={e => setCustomer(p => ({ ...p, fullName: e.target.value }))}
-                                        disabled={submitting} />
-                                </div>
-
-                                 <div className="form-group">
-                                <label>Phone Number</label>
-                                <input type="tel" required placeholder="0912 345 6789"
-                                    value={customer.phone}
-                                    onChange={e => {
-                                        const raw = e.target.value.replace(/\D/g, '').slice(0, 11);
-                                        setCustomer(p => ({ ...p, phone: raw }));
-                                    }}
-                                    pattern="^(09\d{9}|(\+63)9\d{9})$"
-                                    title="Enter a valid Philippine mobile number (e.g. 09123456789)"
-                                    disabled={submitting} />
-                                {customer.phone.length > 0 && !/^09\d{9}$/.test(customer.phone) && (
-                                    <span className="field-error">
-                                        Must be 11 digits starting with 09 (e.g. 09123456789)
-                                    </span>
-                                )}
-                            </div>
-
-                                <div className="form-group">
-                                    <label>Email Address</label>
-                                    <input type="email" required placeholder="juan@example.com"
-                                        value={customer.email}
-                                        onChange={e => setCustomer(p => ({ ...p, email: e.target.value }))}
-                                        disabled={submitting} />
-                                </div>
-
-                                <div className="modal-actions">
-                                    <button type="button" className="cancel-btn" onClick={onClose} disabled={submitting}>
-                                        Cancel
-                                    </button>
-                                    <Button
-                                        type="submit"
-                                        className="confirm-btn"
-                                        disabled={submitting || cart.length === 0}
-                                    >
-                                        {submitting ? 'Confirming…' : `Confirm ${totalVehicles} Vehicle${totalVehicles !== 1 ? 's' : ''}`}
-                                    </Button>
-                                </div>
-                            </form>
-                        </div>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>

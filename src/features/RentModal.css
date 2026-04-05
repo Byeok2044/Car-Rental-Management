@@ -80,14 +80,7 @@
     pointer-events: none;
 }
 
-.modal-header::after {
-    content: '';
-    position: absolute;
-    bottom: 0; left: 28px;
-    width: 36px; height: 3px;
-    background: var(--accent-gold);
-    border-radius: 2px;
-}
+
 
 .modal-header h2 {
     font-size: 1.35rem;
@@ -143,6 +136,7 @@
     border-right: 1px solid var(--border);
     background: var(--light-grey);
     overflow-y: auto;
+    max-height: 80vh;
 }
 
 .modal-right {
@@ -469,6 +463,7 @@
     flex-direction: column;
     flex: 1;
     padding: 20px 24px 0;
+    gap: 12px;
 }
 
 .form-group {
@@ -507,6 +502,13 @@
 
 .form-group input::placeholder { color: #c4c9d4; }
 
+.field-error {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.75rem;
+    color: black;
+}
+
 .readonly-input {
     background: var(--light-grey) !important;
     color: var(--text-muted) !important;
@@ -524,7 +526,7 @@
     padding: 18px 24px;
     margin-top: auto;
     border-top: 1px solid var(--border);
-    background: var(--light-grey);
+    
     flex-shrink: 0;
 }
 
@@ -630,7 +632,7 @@ button.confirm-btn:disabled {
 .lp-trigger__chevron { display: flex; align-items: center; color: var(--text-muted); flex-shrink: 0; }
 
 .lp-dropdown {
-    position: absolute;
+    position: relative;
     top: calc(100% + 6px);
     left: 0; right: 0;
     background: white;
