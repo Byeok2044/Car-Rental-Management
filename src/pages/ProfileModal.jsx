@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import './ProfileModal.css';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const PHONE_REGEX = /^(09|\+639)\d{9}$|^9\d{9}$/;
 
 function getToken() {
     return localStorage.getItem('adminToken') || sessionStorage.getItem('adminToken');
@@ -30,10 +31,10 @@ const AVATAR_COLORS = [
 ];
 
 const FIELDS = [
-    { key: 'fullName',  label: 'Full Name',        placeholder: 'e.g. Maria Santos',         type: 'text',  icon: PersonIcon  },
+    { key: 'fullName',  label: 'Full Name',         placeholder: 'e.g. Maria Santos',         type: 'text',  icon: PersonIcon  },
     { key: 'role',      label: 'Job Title / Role',  placeholder: 'e.g. Fleet Administrator',  type: 'text',  icon: BadgeIcon   },
     { key: 'email',     label: 'Contact Email',     placeholder: 'admin@example.com',          type: 'email', icon: MailIcon    },
-    { key: 'phone',     label: 'Phone Number',      placeholder: '+63 912 345 6789',           type: 'tel',   icon: PhoneIcon   },
+    { key: 'phone',     label: 'Phone Number',      placeholder: '09123456789',                type: 'tel',   icon: PhoneIcon   },
     { key: 'location',  label: 'Location / Branch', placeholder: 'e.g. Makati, Metro Manila',  type: 'text',  icon: PinIcon     },
 ];
 
@@ -51,13 +52,6 @@ const EMPTY = {
     role: 'Administrator', location: '', avatarColor: '#2563eb',
 };
 
-/**
- * Props:
- *   isOpen          — boolean
- *   onClose         — () => void
- *   onProfileSaved  — (profile: object) => void   ← called after successful save
- *   currentColor    — string (optimistic initial color from parent)
- */
 export default function ProfileModal({ isOpen, onClose, onProfileSaved, currentColor }) {
     const [form, setForm] = useState({ ...EMPTY, avatarColor: currentColor || '#2563eb' });
     const [saved, setSaved] = useState(null);
@@ -65,8 +59,6 @@ export default function ProfileModal({ isOpen, onClose, onProfileSaved, currentC
     const [saving, setSaving] = useState(false);
     const [success, setSuccess] = useState(false);
     const [error, setError] = useState('');
-    
-    // 1. ADD THIS STATE (NEW)
     const [isEditing, setIsEditing] = useState(false);
 
     const fetchProfile = useCallback(async () => {
@@ -96,7 +88,7 @@ export default function ProfileModal({ isOpen, onClose, onProfileSaved, currentC
     useEffect(() => {
         if (isOpen) {
             fetchProfile();
-            setIsEditing(false); // Reset to locked mode when modal opens
+            setIsEditing(false); 
             document.body.style.overflow = 'hidden';
         } else {
             document.body.style.overflow = 'unset';
@@ -107,22 +99,41 @@ export default function ProfileModal({ isOpen, onClose, onProfileSaved, currentC
     }, [isOpen, fetchProfile]);
 
     const handleChange = (key, value) => {
-        setForm(prev => ({ ...prev, [key]: value }));
+        if (key === 'phone') {
+            // Numbers only, max 11
+            const sanitizedValue = value.replace(/\D/g, '').slice(0, 11);
+            setForm(prev => ({ ...prev, [key]: sanitizedValue }));
+        } else if (key === 'fullName') {
+            // No numbers allowed in name
+            const sanitizedValue = value.replace(/[0-9]/g, '');
+            setForm(prev => ({ ...prev, [key]: sanitizedValue }));
+        } else {
+            setForm(prev => ({ ...prev, [key]: value }));
+        }
         setSuccess(false);
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setSaving(true); setError(''); setSuccess(false);
+        
+        if (form.phone.length > 0 && form.phone.length !== 11) {
+            setError('Phone number must be exactly 11 digits.');
+            return;
+        }
+
+        setSaving(true); 
+        setError(''); 
+        setSuccess(false);
+        
         try {
             const response = await apiFetch('/api/admin/profile', {
                 method: 'POST',
-                body: JSON.stringify(form),
+                body: JSON.stringify(form), 
             });
             const savedProfile = response.profile || form;
             setSaved({ ...form });
             setSuccess(true);
-            setIsEditing(false); // 2. LOCK THE FORM AGAIN AFTER SUCCESSFUL SAVE
+            setIsEditing(false); 
 
             if (onProfileSaved) onProfileSaved(savedProfile);
             setTimeout(() => setSuccess(false), 3000);
@@ -138,8 +149,6 @@ export default function ProfileModal({ isOpen, onClose, onProfileSaved, currentC
     const initials = form.fullName
         ? form.fullName.split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase()
         : 'AD';
-
-    const isDirty = saved && JSON.stringify(form) !== JSON.stringify(saved);
 
     return (
         <div className="pm-overlay" onClick={onClose}>
@@ -183,7 +192,6 @@ export default function ProfileModal({ isOpen, onClose, onProfileSaved, currentC
                                         </div>
                                     </div>
 
-                                    {/* 3. ONLY SHOW COLOR PICKER IF EDITING */}
                                     {isEditing && (
                                         <>
                                             <p className="pm-color-label">Avatar color</p>
@@ -221,7 +229,6 @@ export default function ProfileModal({ isOpen, onClose, onProfileSaved, currentC
                                                 value={form[key]}
                                                 onChange={e => handleChange(key, e.target.value)}
                                                 placeholder={placeholder}
-                                                // 4. DISABLE INPUTS IF NOT EDITING
                                                 disabled={saving || !isEditing}
                                                 className={`pm-input ${!isEditing ? 'pm-input--locked' : ''}`}
                                             />
@@ -242,7 +249,6 @@ export default function ProfileModal({ isOpen, onClose, onProfileSaved, currentC
                                             value={form.bio}
                                             onChange={e => handleChange('bio', e.target.value)}
                                             placeholder="Write a short bio about yourself..."
-                                            // 5. DISABLE TEXTAREA IF NOT EDITING
                                             disabled={saving || !isEditing}
                                             className={`pm-textarea ${!isEditing ? 'pm-input--locked' : ''}`}
                                         />
@@ -252,7 +258,6 @@ export default function ProfileModal({ isOpen, onClose, onProfileSaved, currentC
                             </div>
 
                             <div className="pm-bottom-bar">
-                                {/* 6. SWAP BUTTONS BASED ON EDIT STATE */}
                                 {!isEditing ? (
                                     <button 
                                         type="button" 
