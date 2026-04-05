@@ -358,3 +358,50 @@
         padding: 20px;
     }
 }
+
+.pm-input--locked {
+    background-color: transparent !important;
+    border-color: transparent !important;
+    cursor: default;
+    color: #4b5563; /* grey-700 */
+    padding-left: 0 !important;
+    font-weight: 500;
+}
+
+/* New Edit Toggle Button */
+.pm-edit-toggle-btn {
+    width: 100%;
+    padding: 12px;
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.pm-edit-toggle-btn:hover {
+    background: #1d4ed8;
+}
+
+/* Cancel Button */
+.pm-cancel-btn {
+    flex: 1;
+    padding: 12px;
+    background: #f3f4f6;
+    color: #4b5563;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.pm-cancel-btn:hover {
+    background: #e5e7eb;
+}
+
+/* Ensure the Save button takes up half when editing */
+.pm-save-btn {
+    flex: 1;
+}

@@ -59,12 +59,15 @@ const EMPTY = {
  *   currentColor    — string (optimistic initial color from parent)
  */
 export default function ProfileModal({ isOpen, onClose, onProfileSaved, currentColor }) {
-    const [form,    setForm]    = useState({ ...EMPTY, avatarColor: currentColor || '#2563eb' });
-    const [saved,   setSaved]   = useState(null);
+    const [form, setForm] = useState({ ...EMPTY, avatarColor: currentColor || '#2563eb' });
+    const [saved, setSaved] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [saving,  setSaving]  = useState(false);
+    const [saving, setSaving] = useState(false);
     const [success, setSuccess] = useState(false);
-    const [error,   setError]   = useState('');
+    const [error, setError] = useState('');
+    
+    // 1. ADD THIS STATE (NEW)
+    const [isEditing, setIsEditing] = useState(false);
 
     const fetchProfile = useCallback(async () => {
         setLoading(true); setError('');
@@ -93,6 +96,7 @@ export default function ProfileModal({ isOpen, onClose, onProfileSaved, currentC
     useEffect(() => {
         if (isOpen) {
             fetchProfile();
+            setIsEditing(false); // Reset to locked mode when modal opens
             document.body.style.overflow = 'hidden';
         } else {
             document.body.style.overflow = 'unset';
@@ -118,10 +122,9 @@ export default function ProfileModal({ isOpen, onClose, onProfileSaved, currentC
             const savedProfile = response.profile || form;
             setSaved({ ...form });
             setSuccess(true);
+            setIsEditing(false); // 2. LOCK THE FORM AGAIN AFTER SUCCESSFUL SAVE
 
-            // Notify parent immediately — no localStorage dependency
             if (onProfileSaved) onProfileSaved(savedProfile);
-
             setTimeout(() => setSuccess(false), 3000);
         } catch (err) {
             setError(err.message);
@@ -142,7 +145,6 @@ export default function ProfileModal({ isOpen, onClose, onProfileSaved, currentC
         <div className="pm-overlay" onClick={onClose}>
             <div className="pm-modal" onClick={e => e.stopPropagation()}>
                 <form onSubmit={handleSubmit} className="pm-page">
-
                     <div className="pm-header-strip">
                         <div className="pm-title-group">
                             <h2 className="pm-page-title">Admin Profile</h2>
@@ -169,7 +171,6 @@ export default function ProfileModal({ isOpen, onClose, onProfileSaved, currentC
                             )}
 
                             <div className="pm-grid">
-                                {/* LEFT: Avatar card */}
                                 <div className="pm-card">
                                     <p className="pm-card-label">Avatar &amp; Appearance</p>
                                     <div className="pm-avatar-wrap">
@@ -182,29 +183,32 @@ export default function ProfileModal({ isOpen, onClose, onProfileSaved, currentC
                                         </div>
                                     </div>
 
-                                    <p className="pm-color-label">Avatar color</p>
-                                    <div className="pm-color-grid">
-                                        {AVATAR_COLORS.map(c => (
-                                            <button
-                                                key={c} type="button"
-                                                className="pm-color-dot"
-                                                onClick={() => handleChange('avatarColor', c)}
-                                                title={c}
-                                                style={{
-                                                    background: c,
-                                                    outline: form.avatarColor === c ? `3px solid ${c}` : 'none',
-                                                    transform: form.avatarColor === c ? 'scale(1.15)' : 'scale(1)',
-                                                }}
-                                            >
-                                                {form.avatarColor === c && <span className="pm-color-dot-check">✓</span>}
-                                            </button>
-                                        ))}
-                                    </div>
+                                    {/* 3. ONLY SHOW COLOR PICKER IF EDITING */}
+                                    {isEditing && (
+                                        <>
+                                            <p className="pm-color-label">Avatar color</p>
+                                            <div className="pm-color-grid">
+                                                {AVATAR_COLORS.map(c => (
+                                                    <button
+                                                        key={c} type="button"
+                                                        className="pm-color-dot"
+                                                        onClick={() => handleChange('avatarColor', c)}
+                                                        title={c}
+                                                        style={{
+                                                            background: c,
+                                                            outline: form.avatarColor === c ? `3px solid ${c}` : 'none',
+                                                            transform: form.avatarColor === c ? 'scale(1.15)' : 'scale(1)',
+                                                        }}
+                                                    >
+                                                        {form.avatarColor === c && <span className="pm-color-dot-check">✓</span>}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
 
-                                    {isDirty && <div className="pm-dirty-pill">Unsaved changes</div>}
                                 </div>
 
-                                {/* RIGHT: Form fields */}
                                 <div className="pm-fields-column">
                                     {FIELDS.map(({ key, label, placeholder, type, icon: Icon }) => (
                                         <div key={key} className="pm-card" style={{ padding: '12px 16px' }}>
@@ -217,8 +221,9 @@ export default function ProfileModal({ isOpen, onClose, onProfileSaved, currentC
                                                 value={form[key]}
                                                 onChange={e => handleChange(key, e.target.value)}
                                                 placeholder={placeholder}
-                                                disabled={saving}
-                                                className="pm-input"
+                                                // 4. DISABLE INPUTS IF NOT EDITING
+                                                disabled={saving || !isEditing}
+                                                className={`pm-input ${!isEditing ? 'pm-input--locked' : ''}`}
                                             />
                                         </div>
                                     ))}
@@ -237,8 +242,9 @@ export default function ProfileModal({ isOpen, onClose, onProfileSaved, currentC
                                             value={form.bio}
                                             onChange={e => handleChange('bio', e.target.value)}
                                             placeholder="Write a short bio about yourself..."
-                                            disabled={saving}
-                                            className="pm-textarea"
+                                            // 5. DISABLE TEXTAREA IF NOT EDITING
+                                            disabled={saving || !isEditing}
+                                            className={`pm-textarea ${!isEditing ? 'pm-input--locked' : ''}`}
                                         />
                                         <p className="pm-char-count">{form.bio.length} / 500 characters</p>
                                     </div>
@@ -246,12 +252,48 @@ export default function ProfileModal({ isOpen, onClose, onProfileSaved, currentC
                             </div>
 
                             <div className="pm-bottom-bar">
-                                <button type="submit" disabled={saving} className="pm-save-btn">
-                                    {saving  ? <><span className="pm-spinner" />Saving…</>
-                                    : success ? <><CheckIcon />Saved!</>
-                                    : <><SaveIcon />Save Changes</>}
+                                {/* 6. SWAP BUTTONS BASED ON EDIT STATE */}
+                                {!isEditing ? (
+                                    <button 
+                                        type="button" 
+                                        className="pm-edit-toggle-btn" 
+                                        onClick={() => setIsEditing(true)}
+                                    >
+                                        Edit Profile
+                                    </button>
+                                ) : (
+                               <div style={{ display: 'flex', gap: '12px', width: '100%', justifyContent: 'center', alignItems: 'center' }}>
+                                <button 
+                                    type="button" 
+                                    className="pm-cancel-btn" 
+                                    disabled={saving}
+                                    onClick={() => {
+                                        setIsEditing(false);
+                                        setForm(saved); 
+                                    }}
+                                >
+                                    Cancel
                                 </button>
-                                {isDirty && <span className="pm-bottom-warning">You have unsaved changes</span>}
+                                
+                                <button 
+                                    type="submit" 
+                                    disabled={saving} 
+                                    className="pm-save-btn"
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                                >
+                                    {saving ? (
+                                        <>
+                                            <span className="pm-spinner" />
+                                            Saving…
+                                        </>
+                                    ) : success ? (
+                                        <>Saved!</>
+                                    ) : (
+                                        <>Save Changes</>
+                                    )}
+                                </button>
+                            </div>
+                                )}
                             </div>
                         </>
                     )}
