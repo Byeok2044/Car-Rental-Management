@@ -142,7 +142,7 @@ function Contact() {
                     <div className="map-wrapper">
                         <iframe
                             title="Office Location"
-                            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3861.123456789!2d120.984!3d14.599!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMTTCsDM1JzU2LjQiTiAxMjDCsDU5JzAyLjQiRQ!5e0!3m2!1sen!2sph!4v1234567890"
+                            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3860.3649663597666!2d121.02148317457362!3d14.63521237622937!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3397b64fd908e0af%3A0xe04536d006e74a08!2sBen-Lor%20Building%2C%20Quezon%20Ave%2C%20Diliman%2C%20Quezon%20City%2C%201103%20Metro%20Manila!5e0!3m2!1sen!2sph!4v1776532521820!5m2!1sen!2sph"
                             width="100%"
                             height="450"
                             style={{ border: 0 }}
