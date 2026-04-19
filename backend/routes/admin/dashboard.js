@@ -1,9 +1,6 @@
-// backend/routes/admin/dashboard.js  (ARIMA-enhanced version)
-// Drop-in replacement for your existing dashboard.js
-// New endpoint: GET /api/dashboard/arima-forecast
-
 import { Router } from 'express';
 import Booking from '../../models/booking.js';
+import BookingPayment from '../../models/BookingPayment.js';
 import Car    from '../../models/cars.js';
 import { requireAdmin } from '../../middleware/auth.js';
 import { forecastRevenue, forecastBookings, forecastDemandByType, quickNextMonth }
@@ -12,30 +9,45 @@ import { forecastRevenue, forecastBookings, forecastDemandByType, quickNextMonth
 const router = Router();
 router.use(requireAdmin);
 
-// ─── Existing: GET /api/dashboard/analytics ──────────────────────────────────
+// ─── GET /api/dashboard/analytics ────────────────────────────────────────────
 router.get('/analytics', async (req, res) => {
     try {
-        const [{ total: totalRevenue } = { total: 0 }] = await BookingPayment.aggregate([
-    {
-        $lookup: {
-            from:         'bookings',
-            localField:   'bookingId',
-            foreignField: '_id',
-            as:           'booking',
-        },
-    },
-    { $unwind: '$booking' },
-    { $match: { 'booking.status': 'Completed' } },
-    { $group: { _id: null, total: { $sum: '$totalCost' } } },
-]);
+        // Total revenue from completed bookings via BookingPayment
+        const [revenueAgg] = await BookingPayment.aggregate([
+            {
+                $lookup: {
+                    from:         'bookings',
+                    localField:   'bookingId',
+                    foreignField: '_id',
+                    as:           'booking',
+                },
+            },
+            { $unwind: '$booking' },
+            { $match: { 'booking.status': 'Completed' } },
+            { $group: { _id: null, total: { $sum: '$totalCost' } } },
+        ]);
+        const totalRevenue = revenueAgg?.total ?? 0;
 
+        // Last 7 days revenue (from BookingPayment joined with completed bookings)
         const ago7 = new Date();
         ago7.setDate(ago7.getDate() - 7);
         ago7.setHours(0, 0, 0, 0);
 
-        const daily = await Booking.aggregate([
-            { $match: { status: 'Completed', updatedAt: { $gte: ago7 } } },
-            { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$updatedAt' } }, revenue: { $sum: '$totalCost' } } },
+        const dailyRaw = await BookingPayment.aggregate([
+            {
+                $lookup: {
+                    from: 'bookings', localField: 'bookingId',
+                    foreignField: '_id', as: 'booking',
+                },
+            },
+            { $unwind: '$booking' },
+            { $match: { 'booking.status': 'Completed', 'booking.updatedAt': { $gte: ago7 } } },
+            {
+                $group: {
+                    _id: { $dateToString: { format: '%Y-%m-%d', date: '$booking.updatedAt' } },
+                    revenue: { $sum: '$totalCost' },
+                },
+            },
             { $sort: { _id: 1 } },
         ]);
 
@@ -43,27 +55,28 @@ router.get('/analytics', async (req, res) => {
             const d  = new Date();
             d.setDate(d.getDate() - (6 - i));
             const ds = d.toISOString().split('T')[0];
-            return { date: ds, revenue: daily.find(r => r._id === ds)?.revenue ?? 0 };
+            return { date: ds, revenue: dailyRaw.find(r => r._id === ds)?.revenue ?? 0 };
         });
 
+        // Pipeline (quoted amounts by payment status)
         const pAgg = await BookingPayment.aggregate([
-    {
-        $lookup: {
-            from: 'bookings', localField: 'bookingId',
-            foreignField: '_id', as: 'booking',
-        },
-    },
-    { $unwind: '$booking' },
-    { $match: { 'booking.status': { $ne: 'Cancelled' }, quotedPrice: { $gt: 0 } } },
-    {
-        $group: {
-            _id:            '$paymentStatus',
-            totalQuoted:    { $sum: '$quotedPrice' },
-            totalCollected: { $sum: '$amountPaid' },
-            count:          { $sum: 1 },
-        },
-    },
-]);
+            {
+                $lookup: {
+                    from: 'bookings', localField: 'bookingId',
+                    foreignField: '_id', as: 'booking',
+                },
+            },
+            { $unwind: '$booking' },
+            { $match: { 'booking.status': { $ne: 'Cancelled' }, quotedPrice: { $gt: 0 } } },
+            {
+                $group: {
+                    _id:            '$paymentStatus',
+                    totalQuoted:    { $sum: '$quotedPrice' },
+                    totalCollected: { $sum: '$amountPaid' },
+                    count:          { $sum: 1 },
+                },
+            },
+        ]);
 
         const pipeline = { confirmed: 0, partial: 0, outstanding: 0 };
         for (const p of pAgg) {
@@ -73,23 +86,68 @@ router.get('/analytics', async (req, res) => {
         }
         pipeline.total = pipeline.confirmed + pipeline.partial + pipeline.outstanding;
 
-        const avgByType = await Booking.aggregate([
+        // Average price by vehicle type (from BookingPayment)
+        const avgByType = await BookingPayment.aggregate([
             { $match: { quotedPrice: { $gt: 0 } } },
-            { $lookup: { from: 'cars', localField: 'carId', foreignField: '_id', as: 'car' } },
+            {
+                $lookup: {
+                    from: 'bookings', localField: 'bookingId',
+                    foreignField: '_id', as: 'booking',
+                },
+            },
+            { $unwind: '$booking' },
+            {
+                $lookup: {
+                    from: 'cars', localField: 'booking.carId',
+                    foreignField: '_id', as: 'car',
+                },
+            },
             { $unwind: '$car' },
-            { $group: { _id: '$car.type', avgPrice: { $avg: '$quotedPrice' }, minPrice: { $min: '$quotedPrice' }, maxPrice: { $max: '$quotedPrice' }, bookings: { $sum: 1 } } },
+            {
+                $group: {
+                    _id:      '$car.type',
+                    avgPrice: { $avg: '$quotedPrice' },
+                    minPrice: { $min: '$quotedPrice' },
+                    maxPrice: { $max: '$quotedPrice' },
+                    bookings: { $sum: 1 },
+                },
+            },
             { $sort: { avgPrice: -1 } },
         ]);
 
+        // Upcoming scheduled revenue (next 30 days)
         const now = new Date(), out30 = new Date();
         out30.setDate(now.getDate() + 30);
 
-        const upcoming = await Booking.aggregate([
-            { $match: { status: { $in: ['Pending', 'Active'] }, quotedPrice: { $gt: 0 }, startDate: { $gte: now, $lte: out30 } } },
-            { $group: { _id: { year: { $isoWeekYear: '$startDate' }, week: { $isoWeek: '$startDate' } }, scheduledRevenue: { $sum: '$quotedPrice' }, bookingCount: { $sum: 1 } } },
+        const upcoming = await BookingPayment.aggregate([
+            {
+                $lookup: {
+                    from: 'bookings', localField: 'bookingId',
+                    foreignField: '_id', as: 'booking',
+                },
+            },
+            { $unwind: '$booking' },
+            {
+                $match: {
+                    'booking.status': { $in: ['Pending', 'Active'] },
+                    quotedPrice: { $gt: 0 },
+                    'booking.startDate': { $gte: now, $lte: out30 },
+                },
+            },
+            {
+                $group: {
+                    _id: {
+                        year: { $isoWeekYear: '$booking.startDate' },
+                        week: { $isoWeek: '$booking.startDate' },
+                    },
+                    scheduledRevenue: { $sum: '$quotedPrice' },
+                    bookingCount:     { $sum: 1 },
+                },
+            },
             { $sort: { '_id.year': 1, '_id.week': 1 } },
         ]);
 
+        // Fleet stats
         const totalCars  = await Car.countDocuments();
         const [activeAgg] = await Booking.aggregate([
             { $match: { status: 'Active' } },
@@ -106,26 +164,37 @@ router.get('/analytics', async (req, res) => {
             maintenance: 0,
         };
 
+        // Recent bookings (join payment info)
         const recent = await Booking.find()
             .sort({ createdAt: -1 }).limit(5)
-            .populate('carId', 'title type licensePlate').lean();
+            .populate('carId',      'title type licensePlate')
+            .populate('customerId', 'name email phone')
+            .lean();
 
-        const recentBookings = recent.map(b => ({
-            id:            b._id,
-            customerName:  b.customerName,
-            customerEmail: b.customerEmail || 'N/A',
-            car:           b.carId?.title || 'Unknown',
-            licensePlate:  b.carId?.licensePlate || '-',
-            qty:           b.qty ?? 1,
-            startDate:     b.startDate,
-            endDate:       b.endDate,
-            totalCost:     b.totalCost,
-            quotedPrice:   b.quotedPrice,
-            paymentStatus: b.paymentStatus,
-            status:        b.status,
-            createdAt:     b.createdAt,
-        }));
+        const recentIds = recent.map(b => b._id);
+        const recentPayments = await BookingPayment.find({ bookingId: { $in: recentIds } }).lean();
+        const payMap = Object.fromEntries(recentPayments.map(p => [String(p.bookingId), p]));
 
+        const recentBookings = recent.map(b => {
+            const pay = payMap[String(b._id)] || {};
+            return {
+                id:            b._id,
+                customerName:  b.customerId?.name  || '',
+                customerEmail: b.customerId?.email || 'N/A',
+                car:           b.carId?.title || 'Unknown',
+                licensePlate:  b.carId?.licensePlate || '-',
+                qty:           b.qty ?? 1,
+                startDate:     b.startDate,
+                endDate:       b.endDate,
+                totalCost:     pay.totalCost    ?? 0,
+                quotedPrice:   pay.quotedPrice  ?? null,
+                paymentStatus: pay.paymentStatus ?? 'Unpaid',
+                status:        b.status,
+                createdAt:     b.createdAt,
+            };
+        });
+
+        // Booking counts by status
         const sAgg = await Booking.aggregate([
             { $group: { _id: '$status', count: { $sum: 1 } } },
         ]);
@@ -136,7 +205,7 @@ router.get('/analytics', async (req, res) => {
 
         res.status(200).json({
             success: true,
-            data: { revenue: { total: totalRevenue ?? 0, last7Days }, pipeline, avgByType, upcoming, fleet, recentBookings, bookingStats },
+            data: { revenue: { total: totalRevenue, last7Days }, pipeline, avgByType, upcoming, fleet, recentBookings, bookingStats },
         });
     } catch (err) {
         console.error('Analytics error:', err);
@@ -144,20 +213,52 @@ router.get('/analytics', async (req, res) => {
     }
 });
 
-// ─── Existing: GET /api/dashboard/seasonal ───────────────────────────────────
+// ─── GET /api/dashboard/seasonal ─────────────────────────────────────────────
 router.get('/seasonal', async (req, res) => {
     try {
         const monthlyVolume = await Booking.aggregate([
             { $match: { status: { $ne: 'Cancelled' } } },
-            { $group: { _id: { year: { $year: '$startDate' }, month: { $month: '$startDate' } }, bookings: { $sum: 1 }, revenue: { $sum: '$totalCost' }, totalQty: { $sum: { $ifNull: ['$qty', 1] } } } },
+            {
+                $group: {
+                    _id: { year: { $year: '$startDate' }, month: { $month: '$startDate' } },
+                    bookings:   { $sum: 1 },
+                    totalQty:   { $sum: { $ifNull: ['$qty', 1] } },
+                },
+            },
             { $sort: { '_id.year': 1, '_id.month': 1 } },
         ]);
 
-        const byMonth = Array.from({ length: 12 }, (_, i) => ({ month: i + 1, totalBookings: 0, totalRevenue: 0, years: 0 }));
+        // Join revenue from BookingPayment for seasonal revenue data
+        const monthlyRevenue = await BookingPayment.aggregate([
+            {
+                $lookup: {
+                    from: 'bookings', localField: 'bookingId',
+                    foreignField: '_id', as: 'booking',
+                },
+            },
+            { $unwind: '$booking' },
+            { $match: { 'booking.status': { $ne: 'Cancelled' } } },
+            {
+                $group: {
+                    _id: {
+                        year:  { $year:  '$booking.startDate' },
+                        month: { $month: '$booking.startDate' },
+                    },
+                    revenue: { $sum: '$totalCost' },
+                },
+            },
+        ]);
+        const revMap = Object.fromEntries(
+            monthlyRevenue.map(r => [`${r._id.year}-${r._id.month}`, r.revenue])
+        );
+
+        const byMonth = Array.from({ length: 12 }, (_, i) => ({
+            month: i + 1, totalBookings: 0, totalRevenue: 0, years: 0,
+        }));
         for (const row of monthlyVolume) {
             const m = byMonth[row._id.month - 1];
             m.totalBookings += row.bookings;
-            m.totalRevenue  += row.revenue;
+            m.totalRevenue  += revMap[`${row._id.year}-${row._id.month}`] ?? 0;
             m.years         += 1;
         }
 
@@ -178,10 +279,10 @@ router.get('/seasonal', async (req, res) => {
             };
         });
 
-        const now2   = new Date();
+        const now2    = new Date();
         const outlook = Array.from({ length: 6 }, (_, i) => {
-            const d    = new Date(now2.getFullYear(), now2.getMonth() + i, 1);
-            const mon  = d.getMonth() + 1;
+            const d   = new Date(now2.getFullYear(), now2.getMonth() + i, 1);
+            const mon = d.getMonth() + 1;
             const seas = seasonality[mon - 1];
             return {
                 year:              d.getFullYear(),
@@ -198,9 +299,47 @@ router.get('/seasonal', async (req, res) => {
             { $match: { status: { $ne: 'Cancelled' } } },
             { $lookup: { from: 'cars', localField: 'carId', foreignField: '_id', as: 'car' } },
             { $unwind: '$car' },
-            { $group: { _id: '$car.type', totalBookings: { $sum: 1 }, totalQty: { $sum: { $ifNull: ['$qty', 1] } }, avgRevenue: { $avg: '$totalCost' }, peakMonth: { $push: { $month: '$startDate' } } } },
+            {
+                $group: {
+                    _id:           '$car.type',
+                    totalBookings: { $sum: 1 },
+                    totalQty:      { $sum: { $ifNull: ['$qty', 1] } },
+                    peakMonth:     { $push: { $month: '$startDate' } },
+                },
+            },
             { $sort: { totalBookings: -1 } },
         ]);
+
+        // Attach avg revenue from payments per type
+        const typeRevAgg = await BookingPayment.aggregate([
+            { $match: { quotedPrice: { $gt: 0 } } },
+            {
+                $lookup: {
+                    from: 'bookings', localField: 'bookingId',
+                    foreignField: '_id', as: 'booking',
+                },
+            },
+            { $unwind: '$booking' },
+            {
+                $lookup: {
+                    from: 'cars', localField: 'booking.carId',
+                    foreignField: '_id', as: 'car',
+                },
+            },
+            { $unwind: '$car' },
+            {
+                $group: {
+                    _id:        '$car.type',
+                    avgRevenue: { $avg: '$quotedPrice' },
+                },
+            },
+        ]);
+        const typeRevMap = Object.fromEntries(typeRevAgg.map(t => [t._id, t.avgRevenue]));
+
+        const typeDemandWithRev = typeDemand.map(t => ({
+            ...t,
+            avgRevenue: Math.round(typeRevMap[t._id] ?? 0),
+        }));
 
         const currentStock = await Car.aggregate([
             { $group: { _id: '$type', totalStock: { $sum: '$stock' }, carCount: { $sum: 1 } } },
@@ -210,42 +349,42 @@ router.get('/seasonal', async (req, res) => {
         const nextPeak       = outlook.find(o => o.tier === 'peak') || outlook[0];
         const peakMultiplier = nextPeak.index || 1;
 
-        const inventoryRecs = typeDemand.map(type => {
+        const inventoryRecs = typeDemandWithRev.map(type => {
             const stock          = stockMap[type._id] || { totalStock: 0, carCount: 0 };
             const avgMonthly     = type.totalBookings / Math.max(monthlyVolume.length, 1);
             const peakProjection = Math.ceil(avgMonthly * peakMultiplier);
             const gap            = peakProjection - stock.totalStock;
             return {
-                type:               type._id,
-                currentStock:       stock.totalStock,
-                totalBookings:      type.totalBookings,
-                avgMonthlyDemand:   Math.round(avgMonthly * 10) / 10,
+                type:             type._id,
+                currentStock:     stock.totalStock,
+                totalBookings:    type.totalBookings,
+                avgMonthlyDemand: Math.round(avgMonthly * 10) / 10,
                 peakProjection,
-                recommendedStock:   Math.max(peakProjection, 1),
-                stockGap:           gap,
-                status:             gap > 0 ? 'understocked' : gap < -2 ? 'overstocked' : 'optimal',
-                avgRevenue:         Math.round(type.avgRevenue),
+                recommendedStock: Math.max(peakProjection, 1),
+                stockGap:         gap,
+                status:           gap > 0 ? 'understocked' : gap < -2 ? 'overstocked' : 'optimal',
+                avgRevenue:       type.avgRevenue,
             };
         });
 
         const yearAgg = await Booking.aggregate([
             { $match: { status: { $ne: 'Cancelled' } } },
-            { $group: { _id: { $year: '$startDate' }, bookings: { $sum: 1 }, revenue: { $sum: '$totalCost' } } },
+            { $group: { _id: { $year: '$startDate' }, bookings: { $sum: 1 } } },
             { $sort: { _id: 1 } },
         ]);
 
         const yoyGrowth = yearAgg.map((y, i) => ({
             year:          y._id,
             bookings:      y.bookings,
-            revenue:       y.revenue,
             bookingGrowth: i > 0 ? Math.round(((y.bookings - yearAgg[i-1].bookings) / yearAgg[i-1].bookings) * 100) : null,
-            revenueGrowth: i > 0 ? Math.round(((y.revenue  - yearAgg[i-1].revenue)  / yearAgg[i-1].revenue)  * 100) : null,
         }));
 
         res.json({
             success: true,
             data: {
-                seasonality, outlook, inventoryRecs, typeDemand, yoyGrowth, nextPeak,
+                seasonality, outlook, inventoryRecs,
+                typeDemand: typeDemandWithRev,
+                yoyGrowth, nextPeak,
                 dataQuality: {
                     totalHistoricalMonths: monthlyVolume.length,
                     hasEnoughData:         monthlyVolume.length >= 3,
@@ -261,27 +400,26 @@ router.get('/seasonal', async (req, res) => {
     }
 });
 
-
-// ─── NEW: GET /api/dashboard/arima-forecast ───────────────────────────────────
-/**
- * Builds time-series data from the database, calls the Python ARIMA service,
- * and returns structured forecasts for revenue, bookings, and vehicle type demand.
- *
- * Query params:
- *   ?periods=6   (default 6, max 12)
- */
+// ─── GET /api/dashboard/arima-forecast ───────────────────────────────────────
 router.get('/arima-forecast', async (req, res) => {
     const periods = Math.min(parseInt(req.query.periods || '6', 10), 12);
 
     try {
-        // 1. Build monthly revenue + booking history from DB
-        const monthlyData = await Booking.aggregate([
-            { $match: { status: 'Completed' } },
+        // Build monthly history from BookingPayment (revenue) + Booking (counts)
+        const monthlyData = await BookingPayment.aggregate([
+            {
+                $lookup: {
+                    from: 'bookings', localField: 'bookingId',
+                    foreignField: '_id', as: 'booking',
+                },
+            },
+            { $unwind: '$booking' },
+            { $match: { 'booking.status': 'Completed' } },
             {
                 $group: {
                     _id: {
-                        year:  { $year:  '$startDate' },
-                        month: { $month: '$startDate' },
+                        year:  { $year:  '$booking.startDate' },
+                        month: { $month: '$booking.startDate' },
                     },
                     revenue:  { $sum: '$totalCost' },
                     bookings: { $sum: 1 },
@@ -297,11 +435,11 @@ router.get('/arima-forecast', async (req, res) => {
             const period = `${row._id.year}-${String(row._id.month).padStart(2, '0')}`;
             const label  = new Date(row._id.year, row._id.month - 1)
                 .toLocaleString('en', { month: 'short', year: 'numeric' });
-            revenueHistory.push({ period, label, revenue:  row.revenue  });
+            revenueHistory.push({ period, label, revenue:  row.revenue });
             bookingHistory.push({ period, label, bookings: row.bookings });
         }
 
-        // 2. Build per-vehicle-type booking history
+        // Per-type demand history
         const typeData = await Booking.aggregate([
             { $match: { status: { $ne: 'Cancelled' } } },
             { $lookup: { from: 'cars', localField: 'carId', foreignField: '_id', as: 'car' } },
@@ -327,7 +465,6 @@ router.get('/arima-forecast', async (req, res) => {
             typeHistoryMap[type].push({ period, bookings: row.bookings });
         }
 
-        // 3. Call ARIMA service (all three endpoints in parallel)
         const [revFc, bookFc, typeFc] = await Promise.all([
             revenueHistory.length  >= 3 ? forecastRevenue(revenueHistory, periods)  : null,
             bookingHistory.length  >= 3 ? forecastBookings(bookingHistory, periods)  : null,
@@ -336,17 +473,15 @@ router.get('/arima-forecast', async (req, res) => {
                 : null,
         ]);
 
-        // 4. Quick next-month snapshot
         const rawRevValues  = revenueHistory.map(r => r.revenue);
         const rawBookValues = bookingHistory.map(r => r.bookings);
         const nextMonth = rawRevValues.length >= 3 || rawBookValues.length >= 3
             ? await quickNextMonth(rawRevValues, rawBookValues)
             : null;
 
-        // 5. Determine data quality
         const dataQuality = {
-            monthsOfData: monthlyData.length,
-            hasEnoughData: monthlyData.length >= 6,
+            monthsOfData:          monthlyData.length,
+            hasEnoughData:         monthlyData.length >= 6,
             arimaServiceAvailable: !!(revFc || bookFc),
             message: monthlyData.length < 3
                 ? 'Need at least 3 months of completed bookings for ARIMA forecasting.'
@@ -360,10 +495,10 @@ router.get('/arima-forecast', async (req, res) => {
             data: {
                 revenueHistory,
                 bookingHistory,
-                revenueForecast:  revFc?.forecasts  || [],
-                bookingForecast:  bookFc?.forecasts  || [],
-                typeForecast:     typeFc?.results    || {},
-                nextMonth:        nextMonth || null,
+                revenueForecast: revFc?.forecasts  || [],
+                bookingForecast: bookFc?.forecasts  || [],
+                typeForecast:    typeFc?.results    || {},
+                nextMonth:       nextMonth || null,
                 diagnostics: {
                     revenue:  revFc?.diagnostics  || null,
                     bookings: bookFc?.diagnostics  || null,

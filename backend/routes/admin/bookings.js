@@ -2,6 +2,7 @@ import { Router } from 'express';
 import mongoose from 'mongoose';
 import Booking from '../../models/booking.js';
 import BookingPayment from '../../models/BookingPayment.js';
+import Customer from '../../models/Customer.js';
 import Car from '../../models/cars.js';
 import { requireAdmin } from '../../middleware/auth.js';
 import { fmtPeso } from '../../utils/helpers.js';
@@ -27,7 +28,15 @@ async function loadFull(id) {
         customerName:  booking.customerId?.name  || '',
         customerEmail: booking.customerId?.email || '',
         customerPhone: booking.customerId?.phone || '',
-        ...(payment || {}),
+        ...(payment ? {
+            quotedPrice:   payment.quotedPrice,
+            quotedAt:      payment.quotedAt,
+            totalCost:     payment.totalCost,
+            amountPaid:    payment.amountPaid,
+            paymentStatus: payment.paymentStatus,
+            paymentMethod: payment.paymentMethod,
+            paymentNotes:  payment.paymentNotes,
+        } : {}),
     };
 }
 
@@ -51,11 +60,11 @@ router.put('/:id/status', async (req, res) => {
 
         const payment = await BookingPayment.findOne({ bookingId: booking._id }).session(session);
 
-        if (status === 'Active' && payment?.paymentStatus === 'Unpaid') {
+        if (status === 'Active' && (!payment || payment.paymentStatus === 'Unpaid')) {
             await session.abortTransaction(); session.endSession();
             return res.status(400).json({ message: 'Booking cannot be marked Active until at least a partial payment has been recorded.' });
         }
-        if (status === 'Completed' && payment?.paymentStatus !== 'Paid') {
+        if (status === 'Completed' && (!payment || payment.paymentStatus !== 'Paid')) {
             await session.abortTransaction(); session.endSession();
             return res.status(400).json({ message: 'Booking cannot be marked Completed until it is fully paid.' });
         }
@@ -79,10 +88,10 @@ router.put('/:id/status', async (req, res) => {
         if (populated.customerEmail) {
             const carTitle = populated.carId?.title || car?.title || 'your vehicle';
             if (status === 'Active') {
-                const { subject, html } = buildActiveEmail(booking, carTitle);
+                const { subject, html } = buildActiveEmail(populated, carTitle);
                 sendEmail(populated.customerEmail, subject, html);
             } else if (status === 'Completed') {
-                buildCompletedEmail({ ...booking.toObject(), ...populated }, carTitle)
+                buildCompletedEmail(populated, carTitle)
                     .then(({ subject, html, attachments }) =>
                         sendEmail(populated.customerEmail, subject, html, attachments))
                     .catch(err => console.error('[completed email] failed:', err.message));
@@ -104,16 +113,19 @@ router.put('/:id/quote', async (req, res) => {
         return res.status(400).json({ message: 'A valid quoted price greater than 0 is required.' });
 
     try {
-        const booking = await Booking.findById(req.params.id);
+        // Find booking (no longer has customerName directly — use customerId)
+        const booking = await Booking.findById(req.params.id)
+            .populate('customerId', 'name email phone')
+            .populate('carId', 'title type image dailyRate');
         if (!booking) return res.status(404).json({ message: 'Booking not found.' });
 
-        const payment = await BookingPayment.findOneAndUpdate(
+        await BookingPayment.findOneAndUpdate(
             { bookingId: booking._id },
             {
-                quotedPrice:   Number(quotedPrice),
-                quotedAt:      new Date(),
-                totalCost:     Number(quotedPrice),
-                paymentNotes:  paymentNotes?.trim() || '',
+                quotedPrice:  Number(quotedPrice),
+                quotedAt:     new Date(),
+                totalCost:    Number(quotedPrice),
+                paymentNotes: paymentNotes?.trim() || '',
             },
             { new: true, upsert: true }
         );

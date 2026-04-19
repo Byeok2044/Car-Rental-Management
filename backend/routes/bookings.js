@@ -187,31 +187,41 @@ router.post('/batch', bookingLimiter, async (req, res) => {
     }
 });
 
-// GET /api/bookings — admin list
+// GET /api/bookings — admin list (joins Customer + BookingPayment)
 router.get('/', requireAdmin, async (req, res) => {
     try {
         const bookings = await Booking.find()
             .sort({ createdAt: -1 })
-            .populate('carId', 'title type image')
+            .populate('carId',      'title type image')
             .populate('customerId', 'name email phone')
             .lean();
 
-        // Attach payment info to each booking
         const ids = bookings.map(b => b._id);
         const payments = await BookingPayment.find({ bookingId: { $in: ids } }).lean();
         const paymentMap = Object.fromEntries(payments.map(p => [String(p.bookingId), p]));
 
-        const merged = bookings.map(b => ({
-            ...b,
-            // Keep old field names so the frontend doesn't break yet
-            customerName:  b.customerId?.name  || '',
-            customerEmail: b.customerId?.email || '',
-            customerPhone: b.customerId?.phone || '',
-            ...paymentMap[String(b._id)],
-        }));
+        const merged = bookings.map(b => {
+            const pay = paymentMap[String(b._id)] || {};
+            return {
+                ...b,
+                // Flatten customer fields so frontend keeps working
+                customerName:  b.customerId?.name  || '',
+                customerEmail: b.customerId?.email || '',
+                customerPhone: b.customerId?.phone || '',
+                // Flatten payment fields
+                quotedPrice:   pay.quotedPrice   ?? null,
+                quotedAt:      pay.quotedAt      ?? null,
+                totalCost:     pay.totalCost     ?? 0,
+                amountPaid:    pay.amountPaid    ?? 0,
+                paymentStatus: pay.paymentStatus ?? 'Unpaid',
+                paymentMethod: pay.paymentMethod ?? null,
+                paymentNotes:  pay.paymentNotes  ?? '',
+            };
+        });
 
         res.json(merged);
-    } catch {
+    } catch (err) {
+        console.error('Bookings list error:', err);
         res.status(500).json({ message: 'Server Error.' });
     }
 });
