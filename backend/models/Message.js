@@ -20,6 +20,7 @@ const messageSchema = new mongoose.Schema({
     urgencyMethod:    { type: String, enum: ['rule-based', 'ml'], default: 'rule-based' },
     urgencyConfirmed: { type: Boolean, default: false },
     urgencyCorrected: { type: String, enum: ['high', 'medium', 'low', null], default: null },
+    messageId:      { type: String, default: null },  // email Message-ID header for threading
 }, { timestamps: true });
 
 export default mongoose.models.Message || mongoose.model('Message', messageSchema, 'messages');

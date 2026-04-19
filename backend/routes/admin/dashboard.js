@@ -15,10 +15,19 @@ router.use(requireAdmin);
 // ─── Existing: GET /api/dashboard/analytics ──────────────────────────────────
 router.get('/analytics', async (req, res) => {
     try {
-        const [{ total: totalRevenue } = { total: 0 }] = await Booking.aggregate([
-            { $match: { status: 'Completed' } },
-            { $group: { _id: null, total: { $sum: '$totalCost' } } },
-        ]);
+        const [{ total: totalRevenue } = { total: 0 }] = await BookingPayment.aggregate([
+    {
+        $lookup: {
+            from:         'bookings',
+            localField:   'bookingId',
+            foreignField: '_id',
+            as:           'booking',
+        },
+    },
+    { $unwind: '$booking' },
+    { $match: { 'booking.status': 'Completed' } },
+    { $group: { _id: null, total: { $sum: '$totalCost' } } },
+]);
 
         const ago7 = new Date();
         ago7.setDate(ago7.getDate() - 7);
@@ -37,10 +46,24 @@ router.get('/analytics', async (req, res) => {
             return { date: ds, revenue: daily.find(r => r._id === ds)?.revenue ?? 0 };
         });
 
-        const pAgg = await Booking.aggregate([
-            { $match: { status: { $ne: 'Cancelled' }, quotedPrice: { $gt: 0 } } },
-            { $group: { _id: '$paymentStatus', totalQuoted: { $sum: '$quotedPrice' }, totalCollected: { $sum: '$amountPaid' }, count: { $sum: 1 } } },
-        ]);
+        const pAgg = await BookingPayment.aggregate([
+    {
+        $lookup: {
+            from: 'bookings', localField: 'bookingId',
+            foreignField: '_id', as: 'booking',
+        },
+    },
+    { $unwind: '$booking' },
+    { $match: { 'booking.status': { $ne: 'Cancelled' }, quotedPrice: { $gt: 0 } } },
+    {
+        $group: {
+            _id:            '$paymentStatus',
+            totalQuoted:    { $sum: '$quotedPrice' },
+            totalCollected: { $sum: '$amountPaid' },
+            count:          { $sum: 1 },
+        },
+    },
+]);
 
         const pipeline = { confirmed: 0, partial: 0, outstanding: 0 };
         for (const p of pAgg) {

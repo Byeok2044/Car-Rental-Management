@@ -9,4 +9,4 @@ const adminSchema = new mongoose.Schema({
     resetTokenExpiry:   { type: Date,   default: null },
 });
 
-export default mongoose.model('Admin', adminSchema, 'users');
+export default mongoose.model('Admin', adminSchema, 'Admin');

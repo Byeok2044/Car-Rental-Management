@@ -55,12 +55,15 @@ ${b.pickupLocation ? `<tr><td>Pickup Location</td><td>${b.pickupLocation}</td></
 
 // ── EMAIL BUILDERS ────────────────────────────────────────────────────────────
 
-export function buildSubmittedEmail(b, t) {
+export function buildSubmittedEmail(booking, customer, carTitle) {
     return {
-        subject: `Booking Received - #${String(b._id).slice(-8).toUpperCase()} | ${BRAND}`,
-        html: htmlShell('Booking Received', `<p>Hi <strong>${b.customerName}</strong>,</p>
-<p>Thank you for choosing <strong>${BRAND}</strong>! We have received your booking. Our team will review it and contact you shortly with pricing and confirmation.</p>
-${bookingTable(b, t)}<p>Questions? Reach our support team anytime.</p>`, '#f59e0b'),
+        subject: `Booking Received - #${String(booking._id).slice(-8).toUpperCase()} | ${BRAND}`,
+        html: htmlShell('Booking Received', `
+            <p>Hi <strong>${customer.name}</strong>,</p>
+            <p>Thank you for choosing <strong>${BRAND}</strong>! We have received your booking.</p>
+            ${bookingTable(booking, carTitle)}
+            <p>Questions? Reach our support team anytime.</p>
+        `, '#f59e0b'),
     };
 }
 

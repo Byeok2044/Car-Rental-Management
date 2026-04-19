@@ -1,19 +1,35 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
 import Booking from '../../models/booking.js';
+import BookingPayment from '../../models/BookingPayment.js';
 import Car from '../../models/cars.js';
 import { requireAdmin } from '../../middleware/auth.js';
 import { fmtPeso } from '../../utils/helpers.js';
 import {
-    sendEmail,
-    buildActiveEmail,
-    buildCompletedEmail,
-    buildQuoteEmail,
-    buildExtensionEmail,
+    sendEmail, buildActiveEmail, buildCompletedEmail,
+    buildQuoteEmail, buildExtensionEmail,
 } from '../../utils/email.js';
 import { generateReceiptPDF } from '../../utils/pdf.js';
+
 const router = Router();
 router.use(requireAdmin);
+
+// ── helper: load booking with everything attached ─────────────────────────────
+async function loadFull(id) {
+    const booking = await Booking.findById(id)
+        .populate('carId',      'title type image dailyRate')
+        .populate('customerId', 'name email phone')
+        .lean();
+    if (!booking) return null;
+    const payment = await BookingPayment.findOne({ bookingId: id }).lean();
+    return {
+        ...booking,
+        customerName:  booking.customerId?.name  || '',
+        customerEmail: booking.customerId?.email || '',
+        customerPhone: booking.customerId?.phone || '',
+        ...(payment || {}),
+    };
+}
 
 // PUT /api/admin/bookings/:id/status
 router.put('/:id/status', async (req, res) => {
@@ -33,11 +49,13 @@ router.put('/:id/status', async (req, res) => {
             return res.status(404).json({ message: 'Booking not found.' });
         }
 
-        if (status === 'Active' && booking.paymentStatus === 'Unpaid') {
+        const payment = await BookingPayment.findOne({ bookingId: booking._id }).session(session);
+
+        if (status === 'Active' && payment?.paymentStatus === 'Unpaid') {
             await session.abortTransaction(); session.endSession();
             return res.status(400).json({ message: 'Booking cannot be marked Active until at least a partial payment has been recorded.' });
         }
-        if (status === 'Completed' && booking.paymentStatus !== 'Paid') {
+        if (status === 'Completed' && payment?.paymentStatus !== 'Paid') {
             await session.abortTransaction(); session.endSession();
             return res.status(400).json({ message: 'Booking cannot be marked Completed until it is fully paid.' });
         }
@@ -48,25 +66,25 @@ router.put('/:id/status', async (req, res) => {
             if (car) {
                 car.stock += booking.qty ?? 1;
                 await car.save({ session });
-                console.log(`Stock restored: ${car.title} -> ${car.stock}`);
             }
         }
 
         booking.status = status;
         await booking.save({ session });
-        await session.commitTransaction(); session.endSession();
+        await session.commitTransaction();
+        session.endSession();
 
-        const populated = await Booking.findById(booking._id).populate('carId', 'title type image');
-        console.log(`Booking ${booking._id} -> ${status}`);
+        const populated = await loadFull(booking._id);
 
-        if (booking.customerEmail) {
+        if (populated.customerEmail) {
             const carTitle = populated.carId?.title || car?.title || 'your vehicle';
             if (status === 'Active') {
                 const { subject, html } = buildActiveEmail(booking, carTitle);
-                sendEmail(booking.customerEmail, subject, html);
+                sendEmail(populated.customerEmail, subject, html);
             } else if (status === 'Completed') {
-                buildCompletedEmail(booking, carTitle)
-                    .then(({ subject, html, attachments }) => sendEmail(booking.customerEmail, subject, html, attachments))
+                buildCompletedEmail({ ...booking.toObject(), ...populated }, carTitle)
+                    .then(({ subject, html, attachments }) =>
+                        sendEmail(populated.customerEmail, subject, html, attachments))
                     .catch(err => console.error('[completed email] failed:', err.message));
             }
         }
@@ -84,21 +102,31 @@ router.put('/:id/quote', async (req, res) => {
     const { quotedPrice, paymentNotes } = req.body;
     if (quotedPrice == null || isNaN(quotedPrice) || Number(quotedPrice) <= 0)
         return res.status(400).json({ message: 'A valid quoted price greater than 0 is required.' });
-    try {
-        const booking = await Booking.findByIdAndUpdate(
-            req.params.id,
-            { quotedPrice: Number(quotedPrice), quotedAt: new Date(), totalCost: Number(quotedPrice), paymentNotes: paymentNotes?.trim() || '' },
-            { new: true }
-        ).populate('carId', 'title type image');
 
+    try {
+        const booking = await Booking.findById(req.params.id);
         if (!booking) return res.status(404).json({ message: 'Booking not found.' });
 
-        if (booking.customerEmail) {
-            const { subject, html } = buildQuoteEmail(booking, booking.carId?.title || 'your vehicle');
-            sendEmail(booking.customerEmail, subject, html);
+        const payment = await BookingPayment.findOneAndUpdate(
+            { bookingId: booking._id },
+            {
+                quotedPrice:   Number(quotedPrice),
+                quotedAt:      new Date(),
+                totalCost:     Number(quotedPrice),
+                paymentNotes:  paymentNotes?.trim() || '',
+            },
+            { new: true, upsert: true }
+        );
+
+        const populated = await loadFull(booking._id);
+
+        if (populated.customerEmail) {
+            const { subject, html } = buildQuoteEmail(populated, populated.carId?.title || 'your vehicle');
+            sendEmail(populated.customerEmail, subject, html);
         }
+
         console.log(`Quote set: ${booking._id} -> ${fmtPeso(quotedPrice)}`);
-        res.json({ message: 'Quote set successfully.', booking });
+        res.json({ message: 'Quote set successfully.', booking: populated });
     } catch (err) {
         console.error('Quote error:', err);
         res.status(500).json({ message: 'Server Error.' });
@@ -110,20 +138,25 @@ router.put('/:id/payment', async (req, res) => {
     const { amountPaid, paymentMethod, paymentNotes } = req.body;
     if (amountPaid == null || isNaN(amountPaid) || Number(amountPaid) < 0)
         return res.status(400).json({ message: 'A valid amount (0 or greater) is required.' });
+
     try {
         const booking = await Booking.findById(req.params.id);
         if (!booking) return res.status(404).json({ message: 'Booking not found.' });
-        if (!booking.quotedPrice) return res.status(400).json({ message: 'Set a quoted price before recording payment.' });
+
+        const payment = await BookingPayment.findOne({ bookingId: booking._id });
+        if (!payment?.quotedPrice)
+            return res.status(400).json({ message: 'Set a quoted price before recording payment.' });
 
         const paid = Number(amountPaid);
-        booking.amountPaid    = paid;
-        booking.paymentStatus = paid >= booking.quotedPrice ? 'Paid' : paid > 0 ? 'Partially Paid' : 'Unpaid';
-        if (paymentMethod) booking.paymentMethod = paymentMethod;
-        if (paymentNotes)  booking.paymentNotes  = paymentNotes.trim();
-        await booking.save();
+        payment.amountPaid    = paid;
+        payment.paymentStatus = paid >= payment.quotedPrice ? 'Paid'
+            : paid > 0 ? 'Partially Paid' : 'Unpaid';
+        if (paymentMethod) payment.paymentMethod = paymentMethod;
+        if (paymentNotes)  payment.paymentNotes  = paymentNotes.trim();
+        await payment.save();
 
-        const populated = await Booking.findById(booking._id).populate('carId', 'title type image');
-        console.log(`Payment: ${booking._id} -> ${fmtPeso(paid)} (${booking.paymentStatus})`);
+        const populated = await loadFull(booking._id);
+        console.log(`Payment: ${booking._id} -> ${fmtPeso(paid)} (${payment.paymentStatus})`);
         res.json({ message: 'Payment recorded.', booking: populated });
     } catch (err) {
         console.error('Payment error:', err);
@@ -148,13 +181,15 @@ router.delete('/:id', async (req, res) => {
             if (car) {
                 car.stock += booking.qty ?? 1;
                 await car.save({ session });
-                console.log(`Stock restored on delete: ${car.title} -> ${car.stock}`);
             }
         }
 
+        await BookingPayment.findOneAndDelete({ bookingId: booking._id }).session(session);
         await Booking.findByIdAndDelete(req.params.id).session(session);
-        await session.commitTransaction(); session.endSession();
-        console.log(`Booking deleted: ${booking._id} (was ${booking.status})`);
+        await session.commitTransaction();
+        session.endSession();
+
+        console.log(`Booking deleted: ${booking._id}`);
         res.json({ message: 'Booking deleted successfully.', deletedId: booking._id });
     } catch (err) {
         await session.abortTransaction(); session.endSession();
@@ -163,130 +198,58 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
-// PUT /api/admin/bookings/:id/extend  (kept for backwards compatibility)
-router.put('/:id/extend', async (req, res) => {
-    const { extraDays, reason } = req.body;
-    const extra = Number(extraDays);
-
-    if (!extra || isNaN(extra) || extra < 1 || extra > 365)
-        return res.status(400).json({ message: 'extraDays must be a whole number between 1 and 365.' });
+// PUT /api/admin/bookings/:id/adjust
+router.put('/:id/adjust', async (req, res) => {
+    const { startDate, endDate, reason } = req.body;
+    if (!endDate) return res.status(400).json({ message: 'endDate is required.' });
 
     try {
-        const booking = await Booking.findById(req.params.id).populate('carId', 'title type dailyRate');
+        const booking = await Booking.findById(req.params.id)
+            .populate('carId', 'title type dailyRate image');
         if (!booking) return res.status(404).json({ message: 'Booking not found.' });
 
         if (!['Pending', 'Active'].includes(booking.status))
-            return res.status(400).json({
-                message: `Cannot extend a "${booking.status}" booking. Only Pending or Active bookings can be extended.`,
-            });
+            return res.status(400).json({ message: `Cannot adjust a "${booking.status}" booking.` });
 
-        const newEnd = new Date(booking.endDate);
-        newEnd.setDate(newEnd.getDate() + extra);
-        booking.endDate    = newEnd;
-        booking.rentalDays = (booking.rentalDays || 1) + extra;
+        const newEnd   = new Date(endDate);  newEnd.setHours(0,0,0,0);
+        let   newStart = new Date(booking.startDate); newStart.setHours(0,0,0,0);
 
-        const dailyRate = booking.carId?.dailyRate ?? 0;
-        if (dailyRate > 0 && booking.quotedPrice != null) {
-            const extraCost     = dailyRate * (booking.qty ?? 1) * extra;
-            booking.quotedPrice = (booking.quotedPrice || 0) + extraCost;
-            booking.totalCost   = booking.quotedPrice;
-        }
-
-        const note = `[Extension +${extra}d${reason ? ': ' + reason.trim() : ''}]`;
-        booking.paymentNotes = booking.paymentNotes ? `${booking.paymentNotes} ${note}` : note;
-        await booking.save();
-
-        const populated = await Booking.findById(booking._id).populate('carId', 'title type image');
-
-        if (booking.customerEmail) {
-            const carTitle = populated.carId?.title || 'your vehicle';
-            const { subject, html } = buildExtensionEmail(booking, carTitle, extra, reason);
-            sendEmail(booking.customerEmail, subject, html);
-        }
-
-        console.log(`Booking ${booking._id} extended +${extra}d → ${newEnd.toDateString()}`);
-        res.json({ message: `Booking extended by ${extra} day(s).`, booking: populated });
-    } catch (err) {
-        console.error('Extend booking error:', err);
-        res.status(500).json({ message: 'Server Error: Could not extend booking.' });
-    }
-});
-
-// PUT /api/admin/bookings/:id/adjust
-// Pending → can change startDate AND endDate
-// Active  → can only change endDate (extend or shorten return date)
-router.put('/:id/adjust', async (req, res) => {
-    const { startDate, endDate, reason } = req.body;
-
-    if (!endDate) {
-        return res.status(400).json({ message: 'endDate is required.' });
-    }
-
-    try {
-        const booking = await Booking.findById(req.params.id).populate('carId', 'title type dailyRate image');
-        if (!booking) return res.status(404).json({ message: 'Booking not found.' });
-
-        if (!['Pending', 'Active'].includes(booking.status)) {
-            return res.status(400).json({
-                message: `Cannot adjust a "${booking.status}" booking. Only Pending or Active bookings can be adjusted.`,
-            });
-        }
-
-        const newEnd = new Date(endDate);
-        newEnd.setHours(0, 0, 0, 0);
-
-        let newStart = new Date(booking.startDate);
-        newStart.setHours(0, 0, 0, 0);
-
-        // Pending: allow start date change too
         if (booking.status === 'Pending' && startDate) {
-            const parsedStart = new Date(startDate);
-            parsedStart.setHours(0, 0, 0, 0);
-            if (parsedStart >= newEnd) {
+            const parsedStart = new Date(startDate); parsedStart.setHours(0,0,0,0);
+            if (parsedStart >= newEnd)
                 return res.status(400).json({ message: 'Start date must be before end date.' });
-            }
             newStart = parsedStart;
             booking.startDate = newStart;
         }
 
-        if (newEnd <= newStart) {
+        if (newEnd <= newStart)
             return res.status(400).json({ message: 'End date must be after start date.' });
-        }
 
-        // Calculate new rental days (inclusive)
-        const msPerDay = 1000 * 60 * 60 * 24;
+        const msPerDay      = 1000 * 60 * 60 * 24;
         const newRentalDays = Math.round((newEnd - newStart) / msPerDay) + 1;
-
         const oldRentalDays = booking.rentalDays || 1;
-        const dayDiff = newRentalDays - oldRentalDays;
+        const dayDiff       = newRentalDays - oldRentalDays;
 
         booking.endDate    = newEnd;
         booking.rentalDays = newRentalDays;
-
-        // Adjust quoted price if daily rate exists
-        const dailyRate = booking.carId?.dailyRate ?? 0;
-        if (dailyRate > 0 && booking.quotedPrice != null && dayDiff !== 0) {
-            const adjustment = dailyRate * (booking.qty ?? 1) * dayDiff;
-            booking.quotedPrice = Math.max(0, (booking.quotedPrice || 0) + adjustment);
-            booking.totalCost   = booking.quotedPrice;
-        }
-
-        // Append internal note
-        const action = dayDiff > 0
-            ? `extended +${dayDiff}d`
-            : dayDiff < 0
-            ? `shortened ${dayDiff}d`
-            : 'dates adjusted';
-        const note = `[Adjustment: ${action}${reason ? ': ' + reason.trim() : ''}]`;
-        booking.paymentNotes = booking.paymentNotes
-            ? `${booking.paymentNotes} ${note}`
-            : note;
-
         await booking.save();
 
-        const populated = await Booking.findById(booking._id).populate('carId', 'title type image');
+        // Adjust payment totals if daily rate exists
+        const dailyRate = booking.carId?.dailyRate ?? 0;
+        if (dailyRate > 0 && dayDiff !== 0) {
+            const payment = await BookingPayment.findOne({ bookingId: booking._id });
+            if (payment?.quotedPrice != null) {
+                const adjustment = dailyRate * (booking.qty ?? 1) * dayDiff;
+                payment.quotedPrice = Math.max(0, payment.quotedPrice + adjustment);
+                payment.totalCost   = payment.quotedPrice;
+                const action = dayDiff > 0 ? `extended +${dayDiff}d` : `shortened ${dayDiff}d`;
+                const note   = `[Adjustment: ${action}${reason ? ': ' + reason.trim() : ''}]`;
+                payment.paymentNotes = payment.paymentNotes ? `${payment.paymentNotes} ${note}` : note;
+                await payment.save();
+            }
+        }
 
-        console.log(`Booking ${booking._id} adjusted: ${newStart.toDateString()} → ${newEnd.toDateString()} (${newRentalDays}d)`);
+        const populated = await loadFull(booking._id);
         res.json({ message: 'Booking adjusted successfully.', booking: populated });
     } catch (err) {
         console.error('Adjust booking error:', err);
@@ -294,24 +257,22 @@ router.put('/:id/adjust', async (req, res) => {
     }
 });
 
+// GET /api/admin/bookings/:id/receipt
 router.get('/:id/receipt', async (req, res) => {
     try {
-        const booking = await Booking.findById(req.params.id).populate('carId');
-        if (!booking) return res.status(404).send('Booking not found');
+        const full = await loadFull(req.params.id);
+        if (!full) return res.status(404).send('Booking not found');
 
-        const carTitle = booking.carId?.title || 'Vehicle';
-        const pdfBuffer = await generateReceiptPDF(booking, carTitle);
-
+        const pdfBuffer = await generateReceiptPDF(full, full.carId?.title || 'Vehicle');
         res.set({
-            'Content-Type': 'application/pdf',
-            'Content-Disposition': `inline; filename=receipt-${booking._id}.pdf`,
-            'Content-Length': pdfBuffer.length,
+            'Content-Type':        'application/pdf',
+            'Content-Disposition': `inline; filename=receipt-${full._id}.pdf`,
+            'Content-Length':      pdfBuffer.length,
         });
-
         res.send(pdfBuffer);
     } catch (err) {
         console.error('PDF Receipt Error:', err);
-        res.status(500).send('Error generating professional receipt');
+        res.status(500).send('Error generating receipt');
     }
 });
 
