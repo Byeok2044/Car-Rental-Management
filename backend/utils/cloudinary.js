@@ -30,25 +30,13 @@ export function extractPublicId(url) {
     }
 }
 
-// ── Signed upload signature ───────────────────────────────────────────────────
+// ── Internal signature builder ────────────────────────────────────────────────
+// NOTE: max_file_size is intentionally excluded from paramsToSign because
+// Cloudinary does not treat it as a signable upload parameter — including it
+// causes an "Invalid Signature" error.
 
-const UPLOAD_FOLDER      = 'car_rental';
-const ALLOWED_FORMATS    = ['jpg', 'jpeg', 'png', 'webp', 'avif'];
-const MAX_BYTES          = 10 * 1024 * 1024; // 10 MB — enforced client-side only
-const SIGNATURE_TTL_SECS = 5 * 60;
-
-/**
- * Generate a Cloudinary signed-upload payload.
- *
- * IMPORTANT: `max_file_size` is NOT included in the signature string because
- * Cloudinary does not treat it as a signable upload parameter — including it
- * causes an "Invalid Signature" error. It is returned so the client can show
- * a friendly size cap, but the real enforcement happens on the client before
- * the upload is attempted.
- */
-export function generateUploadSignature() {
+function _buildSignature(paramsToSign) {
     const cfg = cloudinary.config();
-
     if (!cfg.api_secret) {
         throw new Error(
             'Cloudinary API secret is not configured. ' +
@@ -56,36 +44,66 @@ export function generateUploadSignature() {
         );
     }
 
-    const timestamp = Math.round(Date.now() / 1000);
-
-    // Only include parameters that Cloudinary actually signs.
-    // max_file_size is intentionally excluded — it is NOT a signable param.
-    const paramsToSign = {
-        allowed_formats: ALLOWED_FORMATS.join(','),
-        folder:          UPLOAD_FOLDER,
-        timestamp,
-    };
-
-    // Build "param1=val1&param2=val2...{api_secret}" sorted alphabetically
     const stringToSign =
         Object.entries(paramsToSign)
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([k, v]) => `${k}=${v}`)
             .join('&') + cfg.api_secret;
 
-    const signature = crypto
-        .createHash('sha1')
-        .update(stringToSign)
-        .digest('hex');
+    return crypto.createHash('sha1').update(stringToSign).digest('hex');
+}
+
+// ── Car image upload signature (admin only) ───────────────────────────────────
+
+const CAR_FOLDER      = 'car_rental';
+const CAR_FORMATS     = ['jpg', 'jpeg', 'png', 'webp', 'avif'];
+const CAR_MAX_BYTES   = 10 * 1024 * 1024; // 10 MB
+
+export function generateUploadSignature() {
+    const cfg       = cloudinary.config();
+    const timestamp = Math.round(Date.now() / 1000);
+
+    const paramsToSign = {
+        allowed_formats: CAR_FORMATS.join(','),
+        folder:          CAR_FOLDER,
+        timestamp,
+    };
 
     return {
-        signature,
+        signature:       _buildSignature(paramsToSign),
         timestamp,
         api_key:         cfg.api_key,
         cloud_name:      cfg.cloud_name,
-        folder:          UPLOAD_FOLDER,
-        allowed_formats: ALLOWED_FORMATS.join(','),
-        max_file_size:   MAX_BYTES,   // returned for client-side UX only
+        folder:          CAR_FOLDER,
+        allowed_formats: CAR_FORMATS.join(','),
+        max_file_size:   CAR_MAX_BYTES, // returned for client-side UX only
+    };
+}
+
+// ── KYC document upload signature (public — used by customers) ───────────────
+
+const DOC_FOLDER    = 'kyc_docs';
+const DOC_FORMATS   = ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
+const DOC_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+
+export function generateDocUploadSignature() {
+    const cfg       = cloudinary.config();
+    const timestamp = Math.round(Date.now() / 1000);
+
+    const paramsToSign = {
+        allowed_formats: DOC_FORMATS.join(','),
+        folder:          DOC_FOLDER,
+        timestamp,
+    };
+
+    return {
+        signature:       _buildSignature(paramsToSign),
+        timestamp,
+        api_key:         cfg.api_key,
+        cloud_name:      cfg.cloud_name,
+        folder:          DOC_FOLDER,
+        allowed_formats: DOC_FORMATS.join(','),
+        max_file_size:   DOC_MAX_BYTES, // returned for client-side UX only
     };
 }
 

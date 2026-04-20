@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './Adminpages.css';
+import KycDocsPanel from '../features/KycDocsPanel.jsx';
 
 const API_BASE_URL  = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const PER_PAGE      = 10;
@@ -835,6 +836,8 @@ const handlePrint = async () => {
                             <p className="bp-drawer__sub">{booking.carId?.type  || '—'}</p>
                             {booking.qty > 1 && <span className="bp-drawer__qty-tag">× {booking.qty} units</span>}
                         </div>
+
+                        <KycDocsPanel booking={booking} />
 
                         <div className="bp-drawer__section">
                             <p className="bp-drawer__label">Rental Period</p>

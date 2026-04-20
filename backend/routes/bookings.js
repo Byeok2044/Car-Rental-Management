@@ -28,6 +28,14 @@ async function findOrCreateCustomer({ name, email, phone }, session) {
     return customer;
 }
 
+// ── helper: validate Cloudinary URLs (basic guard) ────────────────────────────
+function sanitiseDocUrls(urls) {
+    if (!Array.isArray(urls)) return [];
+    return urls
+        .filter(u => typeof u === 'string' && u.startsWith('https://res.cloudinary.com/'))
+        .slice(0, 6); // cap at 6 docs per booking
+}
+
 // POST /api/bookings
 router.post('/', bookingLimiter, async (req, res) => {
     const session = await mongoose.startSession();
@@ -37,6 +45,7 @@ router.post('/', bookingLimiter, async (req, res) => {
             carId, qty = 1,
             customerName, customerEmail, customerPhone,
             startDate, endDate, rentalDays, pickupLocation,
+            kycDocUrls = [], customerType = 'individual',
         } = req.body;
 
         if (!carId || !customerName || !startDate || !endDate || !rentalDays) {
@@ -76,6 +85,8 @@ router.post('/', bookingLimiter, async (req, res) => {
             rentalDays: Number(rentalDays),
             pickupLocation: pickupLocation || '',
             status: 'Pending',
+            kycDocUrls:   sanitiseDocUrls(kycDocUrls),
+            customerType: ['individual', 'business'].includes(customerType) ? customerType : 'individual',
         }], { session });
 
         await BookingPayment.create([{ bookingId: booking._id }], { session });
@@ -85,7 +96,7 @@ router.post('/', bookingLimiter, async (req, res) => {
         await session.commitTransaction();
         session.endSession();
 
-        console.log(`New booking: ${booking._id} | ${car.title}`);
+        console.log(`New booking: ${booking._id} | ${car.title} | docs: ${booking.kycDocUrls.length}`);
 
         if (customer.email) {
             const { subject, html } = buildSubmittedEmail(booking, customer, car.title);
@@ -116,6 +127,7 @@ router.post('/batch', bookingLimiter, async (req, res) => {
                 carId, qty = 1,
                 customerName, customerEmail, customerPhone,
                 startDate, endDate, rentalDays, pickupLocation,
+                kycDocUrls = [], customerType = 'individual',
             } = item;
 
             if (!carId || !customerName || !startDate || !endDate || !rentalDays) {
@@ -155,6 +167,8 @@ router.post('/batch', bookingLimiter, async (req, res) => {
                 rentalDays:     Number(rentalDays),
                 pickupLocation: pickupLocation || '',
                 status: 'Pending',
+                kycDocUrls:   sanitiseDocUrls(kycDocUrls),
+                customerType: ['individual', 'business'].includes(customerType) ? customerType : 'individual',
             }], { session });
 
             await BookingPayment.create([{ bookingId: booking._id }], { session });
@@ -204,11 +218,9 @@ router.get('/', requireAdmin, async (req, res) => {
             const pay = paymentMap[String(b._id)] || {};
             return {
                 ...b,
-                // Flatten customer fields so frontend keeps working
                 customerName:  b.customerId?.name  || '',
                 customerEmail: b.customerId?.email || '',
                 customerPhone: b.customerId?.phone || '',
-                // Flatten payment fields
                 quotedPrice:   pay.quotedPrice   ?? null,
                 quotedAt:      pay.quotedAt      ?? null,
                 totalCost:     pay.totalCost     ?? 0,

@@ -3,7 +3,57 @@ import Button from '../components/Commons/Button';
 import BookingCalendar from '../components/Layout/BookingCalendar';
 import './RentModal.css';
 
-// ─── Terms & Conditions Modal ─────────────────────────────────────────────────
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+// Allowed file types for KYC documents
+const DOC_ALLOWED_MIME  = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
+const DOC_ALLOWED_EXT   = ['.jpg', '.jpeg', '.png', '.webp', '.pdf'];
+const DOC_MAX_BYTES     = 10 * 1024 * 1024; // 10 MB
+
+// ── Cloudinary doc upload helper ──────────────────────────────────────────────
+
+async function uploadDocToCloudinary(file) {
+    if (!file) throw new Error('No file provided.');
+
+    // 1. Client-side validation
+    if (!DOC_ALLOWED_MIME.includes(file.type)) {
+        throw new Error(`"${file.name}" is not a supported type. Use JPG, PNG, WebP, or PDF.`);
+    }
+    if (file.size > DOC_MAX_BYTES) {
+        const mb = (file.size / (1024 * 1024)).toFixed(1);
+        throw new Error(`"${file.name}" (${mb} MB) exceeds the 10 MB limit.`);
+    }
+
+    // 2. Get signed token from backend (no auth required for KYC docs)
+    const signRes = await fetch(`${API_BASE_URL}/api/upload/sign-doc`);
+    if (!signRes.ok) {
+        const err = await signRes.json().catch(() => ({}));
+        throw new Error(err.message || 'Could not get upload token from server.');
+    }
+    const { signature, timestamp, api_key, cloud_name, folder, allowed_formats } = await signRes.json();
+
+    // 3. Upload directly to Cloudinary
+    const formData = new FormData();
+    formData.append('file',            file);
+    formData.append('api_key',         api_key);
+    formData.append('timestamp',       timestamp);
+    formData.append('signature',       signature);
+    formData.append('folder',          folder);
+    formData.append('allowed_formats', allowed_formats);
+
+    const uploadRes = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloud_name}/image/upload`,
+        { method: 'POST', body: formData }
+    );
+    const uploadData = await uploadRes.json();
+    if (!uploadRes.ok || uploadData.error) {
+        throw new Error(uploadData.error?.message || 'Cloudinary upload failed.');
+    }
+
+    return uploadData.secure_url;
+}
+
+// ── Terms & Conditions Modal ──────────────────────────────────────────────────
 function TermsModal({ onClose }) {
     return (
         <>
@@ -123,7 +173,7 @@ function TermsModal({ onClose }) {
     );
 }
 
-// ─── Location Picker ──────────────────────────────────────────────────────────
+// ── Location Picker ───────────────────────────────────────────────────────────
 const LOCATION_GROUPS = [
     {
         group: 'Metro Manila',
@@ -292,14 +342,23 @@ function LocationPicker({ value, onChange, disabled }) {
     );
 }
 
-// ─── Document Upload Component ────────────────────────────────────────────────
-function DocUpload({ label, hint, accept = 'image/*,.pdf', value, onChange, required = false }) {
-    const fileRef = useRef(null);
-    const [preview, setPreview] = useState(null);
-    const [dragging, setDragging] = useState(false);
+// ── Document Upload Component (with Cloudinary upload support) ─────────────────
+function DocUpload({ label, hint, accept = 'image/*,.pdf', value, onChange, required = false, uploadedUrl, onUploaded, disabled: externalDisabled = false }) {
+    const fileRef        = useRef(null);
+    const [preview,     setPreview]     = useState(null);
+    const [dragging,    setDragging]    = useState(false);
+    const [uploading,   setUploading]   = useState(false);
+    const [uploadError, setUploadError] = useState('');
 
-    function handleFile(file) {
+    // Show a "already uploaded" state if a URL exists (e.g. from a previous attempt)
+    const isUploaded = !!uploadedUrl;
+    const disabled   = externalDisabled || uploading;
+
+    async function handleFile(file) {
         if (!file) return;
+        setUploadError('');
+
+        // Show local preview immediately
         onChange(file);
         if (file.type.startsWith('image/')) {
             const reader = new FileReader();
@@ -307,6 +366,18 @@ function DocUpload({ label, hint, accept = 'image/*,.pdf', value, onChange, requ
             reader.readAsDataURL(file);
         } else {
             setPreview('pdf');
+        }
+
+        // Upload to Cloudinary straight away
+        setUploading(true);
+        try {
+            const url = await uploadDocToCloudinary(file);
+            onUploaded(url);
+        } catch (err) {
+            setUploadError(err.message);
+            onUploaded(null);
+        } finally {
+            setUploading(false);
         }
     }
 
@@ -320,7 +391,9 @@ function DocUpload({ label, hint, accept = 'image/*,.pdf', value, onChange, requ
     function handleRemove(e) {
         e.stopPropagation();
         onChange(null);
+        onUploaded(null);
         setPreview(null);
+        setUploadError('');
         if (fileRef.current) fileRef.current.value = '';
     }
 
@@ -332,25 +405,32 @@ function DocUpload({ label, hint, accept = 'image/*,.pdf', value, onChange, requ
             </label>
 
             <div
-                onClick={() => !value && fileRef.current?.click()}
-                onDragOver={e => { e.preventDefault(); setDragging(true); }}
+                onClick={() => !value && !disabled && fileRef.current?.click()}
+                onDragOver={e => { e.preventDefault(); if (!disabled) setDragging(true); }}
                 onDragLeave={() => setDragging(false)}
-                onDrop={handleDrop}
+                onDrop={disabled ? undefined : handleDrop}
                 style={{
                     position: 'relative',
-                    border: `1.5px dashed ${dragging ? '#2563eb' : value ? '#22c55e' : '#d1d5db'}`,
+                    border: `1.5px dashed ${
+                        uploadError  ? '#fca5a5' :
+                        dragging     ? '#2563eb' :
+                        isUploaded   ? '#22c55e' :
+                        value        ? '#fbbf24' :
+                        '#d1d5db'
+                    }`,
                     borderRadius: 10,
-                    background: dragging ? '#eff6ff' : value ? '#f0fdf4' : '#fafafa',
+                    background: uploadError ? '#fef2f2' : dragging ? '#eff6ff' : isUploaded ? '#f0fdf4' : value ? '#fffbeb' : '#fafafa',
                     padding: value ? '10px 12px' : '16px 12px',
-                    cursor: value ? 'default' : 'pointer',
+                    cursor: value || disabled ? 'default' : 'pointer',
                     transition: 'all 0.2s',
                     display: 'flex',
                     alignItems: 'center',
                     gap: 10,
                     minHeight: 56,
+                    opacity: disabled && !value ? 0.6 : 1,
                 }}
             >
-                {/* Preview / placeholder */}
+                {/* Empty state */}
                 {!value && (
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, pointerEvents: 'none' }}>
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -361,10 +441,11 @@ function DocUpload({ label, hint, accept = 'image/*,.pdf', value, onChange, requ
                         <span style={{ fontSize: '0.78rem', color: '#9ca3af', fontWeight: 500, textAlign: 'center' }}>
                             {hint || 'Click or drag file here'}
                         </span>
-                        <span style={{ fontSize: '0.7rem', color: '#c4c9d4' }}>JPG, PNG, or PDF · Max 5MB</span>
+                        <span style={{ fontSize: '0.7rem', color: '#c4c9d4' }}>JPG, PNG, WebP, or PDF · Max 10 MB</span>
                     </div>
                 )}
 
+                {/* PDF preview */}
                 {value && preview === 'pdf' && (
                     <>
                         <div style={{ width: 38, height: 38, background: '#fee2e2', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -374,30 +455,55 @@ function DocUpload({ label, hint, accept = 'image/*,.pdf', value, onChange, requ
                             </svg>
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: '#166534', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value.name}</p>
+                            <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: isUploaded ? '#166534' : '#92400e', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value.name}</p>
                             <p style={{ margin: '2px 0 0', fontSize: '0.72rem', color: '#9ca3af' }}>{(value.size / 1024).toFixed(0)} KB · PDF</p>
                         </div>
                     </>
                 )}
 
+                {/* Image preview */}
                 {value && preview && preview !== 'pdf' && (
                     <>
-                        <img src={preview} alt="preview" style={{ width: 52, height: 38, objectFit: 'cover', borderRadius: 6, border: '1px solid #d1fae5', flexShrink: 0 }} />
+                        <img src={preview} alt="preview" style={{ width: 52, height: 38, objectFit: 'cover', borderRadius: 6, border: `1px solid ${isUploaded ? '#d1fae5' : '#fde68a'}`, flexShrink: 0 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: '#166534', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value.name}</p>
+                            <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: isUploaded ? '#166534' : '#92400e', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value.name}</p>
                             <p style={{ margin: '2px 0 0', fontSize: '0.72rem', color: '#9ca3af' }}>{(value.size / 1024).toFixed(0)} KB</p>
                         </div>
                     </>
                 )}
 
+                {/* Upload spinner / done / change button */}
                 {value && (
-                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                        <button type="button" onClick={() => fileRef.current?.click()}
-                            style={{ padding: '5px 10px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 600, color: '#2563eb', fontFamily: 'inherit' }}>
-                            Change
-                        </button>
-                        <button type="button" onClick={handleRemove}
-                            style={{ padding: '5px', background: '#fee2e2', border: '1px solid #fecaca', borderRadius: 6, cursor: 'pointer', color: '#dc2626', display: 'flex', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
+                        {uploading ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', color: '#2563eb', fontWeight: 600 }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                                    style={{ animation: 'rm-spin 0.8s linear infinite' }}>
+                                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                                </svg>
+                                Uploading…
+                            </div>
+                        ) : isUploaded ? (
+                            <>
+                                <span style={{ fontSize: '0.72rem', color: '#16a34a', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                        <polyline points="20 6 9 17 4 12"/>
+                                    </svg>
+                                    Saved
+                                </span>
+                                <button type="button" onClick={() => fileRef.current?.click()}
+                                    style={{ padding: '4px 10px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 600, color: '#2563eb', fontFamily: 'inherit' }}>
+                                    Change
+                                </button>
+                            </>
+                        ) : (
+                            <button type="button" onClick={() => fileRef.current?.click()}
+                                style={{ padding: '5px 10px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 600, color: '#2563eb', fontFamily: 'inherit' }}>
+                                Change
+                            </button>
+                        )}
+                        <button type="button" onClick={handleRemove} disabled={uploading}
+                            style={{ padding: '5px', background: '#fee2e2', border: '1px solid #fecaca', borderRadius: 6, cursor: uploading ? 'not-allowed' : 'pointer', color: '#dc2626', display: 'flex', alignItems: 'center', opacity: uploading ? 0.4 : 1 }}>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                 <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                             </svg>
@@ -405,23 +511,34 @@ function DocUpload({ label, hint, accept = 'image/*,.pdf', value, onChange, requ
                     </div>
                 )}
 
-                <input ref={fileRef} type="file" accept={accept} style={{ display: 'none' }}
-                    onChange={e => handleFile(e.target.files[0])} />
+                <input ref={fileRef} type="file" accept={DOC_ALLOWED_EXT.join(',')} style={{ display: 'none' }}
+                    onChange={e => handleFile(e.target.files[0])} disabled={disabled} />
             </div>
 
-            {value && (
+            {/* Upload error */}
+            {uploadError && (
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 7, padding: '7px 10px' }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
+                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                    <span style={{ fontSize: '0.75rem', color: '#b91c1c', fontWeight: 500 }}>{uploadError}</span>
+                </div>
+            )}
+
+            {/* Uploaded success URL hint */}
+            {isUploaded && !uploadError && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="20 6 9 17 4 12"/>
                     </svg>
-                    <span style={{ fontSize: '0.72rem', color: '#16a34a', fontWeight: 600 }}>Uploaded successfully</span>
+                    <span style={{ fontSize: '0.72rem', color: '#16a34a', fontWeight: 600 }}>Uploaded to secure storage</span>
                 </div>
             )}
         </div>
     );
 }
 
-// ─── Customer Type Toggle ─────────────────────────────────────────────────────
+// ── Customer Type Toggle ──────────────────────────────────────────────────────
 function CustomerTypeToggle({ value, onChange }) {
     return (
         <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: 10, padding: 4, gap: 3, marginBottom: 4 }}>
@@ -456,7 +573,7 @@ function CustomerTypeToggle({ value, onChange }) {
     );
 }
 
-// ─── Cart Item ────────────────────────────────────────────────────────────────
+// ── Cart Item ─────────────────────────────────────────────────────────────────
 function CartItem({ item, allCars, onUpdate, onRemove, index, error }) {
     const [calOpen, setCalOpen] = useState(index === 0);
     const maxQty = item.car.stock;
@@ -530,7 +647,7 @@ function CartItem({ item, allCars, onUpdate, onRemove, index, error }) {
     );
 }
 
-// ─── Add Vehicle Panel ────────────────────────────────────────────────────────
+// ── Add Vehicle Panel ─────────────────────────────────────────────────────────
 function AddVehiclePanel({ allCars, cartCarIds, onAdd }) {
     const [open, setOpen] = useState(false);
     const available = allCars.filter(c => c.stock > 0 && !cartCarIds.includes(c._id));
@@ -566,7 +683,7 @@ function AddVehiclePanel({ allCars, cartCarIds, onAdd }) {
     );
 }
 
-// ─── Section Divider ──────────────────────────────────────────────────────────
+// ── Section Divider ───────────────────────────────────────────────────────────
 function SectionLabel({ children, icon }) {
     return (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0 4px' }}>
@@ -579,9 +696,9 @@ function SectionLabel({ children, icon }) {
     );
 }
 
-// ─── Main Modal ───────────────────────────────────────────────────────────────
+// ── Main Modal ────────────────────────────────────────────────────────────────
 function RentModal({ car, allCars = [], onClose, onConfirm }) {
-    const [customerType, setCustomerType] = useState('individual'); // 'individual' | 'business'
+    const [customerType, setCustomerType] = useState('individual');
 
     const [customer, setCustomer] = useState({
         fullName: '',
@@ -589,17 +706,21 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
         email:    '',
     });
 
-    // Individual docs
-    const [idFile,      setIdFile]      = useState(null); // Driver's License or Valid ID
-    const [selfieFile,  setSelfieFile]  = useState(null); // Optional selfie with ID
+    // Individual docs — file objects for preview, URLs for actual storage
+    const [idFile,       setIdFile]       = useState(null);
+    const [idUrl,        setIdUrl]        = useState('');   // Cloudinary URL
+    const [selfieFile,   setSelfieFile]   = useState(null);
+    const [selfieUrl,    setSelfieUrl]    = useState('');   // Cloudinary URL
 
     // Business docs
-    const [busName,     setBusName]     = useState('');   // Business/company name
-    const [authPerson,  setAuthPerson]  = useState('');   // Name of authorized person
-    const [authPhone,   setAuthPhone]   = useState('');   // Company contact number
-    const [authEmail,   setAuthEmail]   = useState('');   // Company contact email
-    const [bizRegFile,  setBizRegFile]  = useState(null); // Business registration doc
-    const [authIdFile,  setAuthIdFile]  = useState(null); // Authorized person's ID
+    const [busName,      setBusName]      = useState('');
+    const [authPerson,   setAuthPerson]   = useState('');
+    const [authPhone,    setAuthPhone]    = useState('');
+    const [authEmail,    setAuthEmail]    = useState('');
+    const [bizRegFile,   setBizRegFile]   = useState(null);
+    const [bizRegUrl,    setBizRegUrl]    = useState('');   // Cloudinary URL
+    const [authIdFile,   setAuthIdFile]   = useState(null);
+    const [authIdUrl,    setAuthIdUrl]    = useState('');   // Cloudinary URL
 
     const [cart, setCart] = useState([{
         car,
@@ -616,6 +737,9 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
     const [submitted,      setSubmitted]      = useState(false);
     const [errorMap,       setErrorMap]       = useState({});
     const [docError,       setDocError]       = useState('');
+
+    // True while any DocUpload is still in the middle of uploading
+    const anyDocUploading = false; // DocUpload manages its own spinner; we block submit via URL check instead
 
     const updateItem = useCallback((index, patch) => {
         setCart(prev => prev.map((item, i) => i === index ? { ...item, ...patch } : item));
@@ -638,9 +762,11 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
         setTermsError(false);
         setAgreedToTerms(false);
         setCustomer({ fullName: '', phone: '', email: '' });
-        setIdFile(null); setSelfieFile(null);
-        setBusName(''); setAuthPerson(''); setAuthPhone(''); setAuthEmail('');
-        setBizRegFile(null); setAuthIdFile(null);
+        setIdFile(null);       setIdUrl('');
+        setSelfieFile(null);   setSelfieUrl('');
+        setBusName('');        setAuthPerson(''); setAuthPhone(''); setAuthEmail('');
+        setBizRegFile(null);   setBizRegUrl('');
+        setAuthIdFile(null);   setAuthIdUrl('');
         setCustomerType('individual');
     }
 
@@ -659,13 +785,33 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
         });
         if (Object.keys(newErrors).length > 0) { setErrorMap(newErrors); return; }
 
-        // Document validation
+        // Document validation — must be uploaded (URL present), not just selected
         if (customerType === 'individual') {
-            if (!idFile) { setDocError("Please upload your Driver's License or valid government ID."); return; }
+            if (!idFile) {
+                setDocError("Please upload your Driver's License or valid government ID.");
+                return;
+            }
+            if (idFile && !idUrl) {
+                setDocError("Your ID is still uploading — please wait a moment before confirming.");
+                return;
+            }
         } else {
-            if (!bizRegFile) { setDocError('Please upload your Business Registration document.'); return; }
-            if (!authIdFile) { setDocError("Please upload the authorized person's valid ID."); return; }
-            if (!authPerson.trim()) { setDocError('Please enter the name of the authorized person.'); return; }
+            if (!bizRegFile || !bizRegUrl) {
+                setDocError(!bizRegFile
+                    ? 'Please upload your Business Registration document.'
+                    : 'Your business registration is still uploading — please wait.');
+                return;
+            }
+            if (!authIdFile || !authIdUrl) {
+                setDocError(!authIdFile
+                    ? "Please upload the authorized person's valid ID."
+                    : "The authorized person's ID is still uploading — please wait.");
+                return;
+            }
+            if (!authPerson.trim()) {
+                setDocError('Please enter the name of the authorized person.');
+                return;
+            }
         }
 
         if (!agreedToTerms) {
@@ -673,6 +819,11 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
             document.getElementById('terms-checkbox-area')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
             return;
         }
+
+        // Collect uploaded doc URLs
+        const kycDocUrls = customerType === 'individual'
+            ? [idUrl, selfieUrl].filter(Boolean)
+            : [bizRegUrl, authIdUrl].filter(Boolean);
 
         setSubmitting(true);
         try {
@@ -692,6 +843,8 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
                 })(),
                 rentalDays:     item.rentalDays,
                 pickupLocation: resolveLocation(item.pickupLocation),
+                kycDocUrls,
+                customerType,
             }));
 
             await onConfirm(bookings);
@@ -705,6 +858,10 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
 
     return (
         <>
+            <style>{`
+                @keyframes rm-spin { to { transform: rotate(360deg); } }
+            `}</style>
+
             {showTermsModal && <TermsModal onClose={() => setShowTermsModal(false)} />}
 
             <div className="modal-overlay">
@@ -877,31 +1034,34 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
                                                     </svg>
                                                 }>Identity Verification (KYC)</SectionLabel>
 
-                                                {/* KYC info banner */}
                                                 <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
                                                         <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                                                     </svg>
                                                     <p style={{ margin: 0, fontSize: '0.78rem', color: '#92400e', lineHeight: 1.5 }}>
-                                                        Before renting, we verify customer identity. Please upload a clear photo or scan of your ID.
+                                                        Documents are uploaded securely. Please upload a clear photo or scan of your ID.
                                                     </p>
                                                 </div>
 
                                                 <DocUpload
                                                     label="Driver's License or Valid Government ID"
                                                     hint="Upload Driver's License, Passport, SSS, PhilHealth, or any gov't ID"
-                                                    accept="image/*,.pdf"
                                                     value={idFile}
                                                     onChange={setIdFile}
+                                                    uploadedUrl={idUrl}
+                                                    onUploaded={setIdUrl}
                                                     required
+                                                    disabled={submitting}
                                                 />
 
                                                 <DocUpload
                                                     label="Selfie Holding Your ID (Optional)"
                                                     hint="A photo of you holding your ID for faster verification"
-                                                    accept="image/*"
                                                     value={selfieFile}
                                                     onChange={setSelfieFile}
+                                                    uploadedUrl={selfieUrl}
+                                                    onUploaded={setSelfieUrl}
+                                                    disabled={submitting}
                                                 />
                                             </>
                                         )}
@@ -966,32 +1126,35 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
                                                     </svg>
                                                 }>Business Documents (KYC)</SectionLabel>
 
-                                                {/* KYC info banner for business */}
                                                 <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
                                                         <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                                                     </svg>
                                                     <p style={{ margin: 0, fontSize: '0.78rem', color: '#92400e', lineHeight: 1.5 }}>
-                                                        Business clients must provide registration documents and the authorized representative's valid ID.
+                                                        Business clients must provide registration documents and the authorized representative's valid ID. Documents upload securely to our server.
                                                     </p>
                                                 </div>
 
                                                 <DocUpload
                                                     label="Business Registration Document"
                                                     hint="DTI Certificate, SEC Registration, or Business Permit"
-                                                    accept="image/*,.pdf"
                                                     value={bizRegFile}
                                                     onChange={setBizRegFile}
+                                                    uploadedUrl={bizRegUrl}
+                                                    onUploaded={setBizRegUrl}
                                                     required
+                                                    disabled={submitting}
                                                 />
 
                                                 <DocUpload
                                                     label="Authorized Person's Valid ID"
                                                     hint="Driver's License, Passport, or any government-issued ID"
-                                                    accept="image/*,.pdf"
                                                     value={authIdFile}
                                                     onChange={setAuthIdFile}
+                                                    uploadedUrl={authIdUrl}
+                                                    onUploaded={setAuthIdUrl}
                                                     required
+                                                    disabled={submitting}
                                                 />
                                             </>
                                         )}
