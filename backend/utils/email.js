@@ -170,3 +170,60 @@ export async function sendEmail(to, subject, html, attachments = []) {
         console.error('Email error:', e.message);
     }
 }
+
+// ── ADD THESE TWO FUNCTIONS to backend/utils/email.js ──────────────────────
+// Place them after buildSubmittedEmail and before buildQuoteEmail
+
+/**
+ * Email sent when admin verifies the customer's KYC documents.
+ * Booking moves from Unverified → Pending.
+ */
+export function buildDocsVerifiedEmail(booking, carTitle) {
+    const refNo = `#${String(booking._id).slice(-8).toUpperCase()}`;
+    return {
+        subject: `Documents Verified — Your Booking is Now Pending | ${BRAND}`,
+        html: htmlShell('Documents Verified ✓', `
+            <p>Hi <strong>${booking.customerName}</strong>,</p>
+            <p>Great news! Our team has reviewed and <strong>verified your submitted documents</strong>. Your booking is now in <strong>Pending</strong> status.</p>
+            ${bookingTable(booking, carTitle)}
+            <p>Here's what happens next:</p>
+            <ol style="padding-left:20px;line-height:2">
+                <li>Our team will send you a <strong>price quote</strong> for your rental.</li>
+                <li>Once you make a payment, your booking will be marked <strong>Active</strong>.</li>
+                <li>Pick up your vehicle on the agreed start date — bring a valid ID.</li>
+            </ol>
+            <p>If you have any questions in the meantime, feel free to reply to this email or contact our support team.</p>
+            <p>Thank you for choosing <strong>${BRAND}</strong>!</p>
+        `, '#16a34a'),
+    };
+}
+
+/**
+ * Email sent when admin rejects the customer's KYC documents.
+ * Booking is cancelled and customer is informed.
+ */
+export function buildDocsRejectedEmail(booking, carTitle, reason) {
+    const refNo = `#${String(booking._id).slice(-8).toUpperCase()}`;
+    return {
+        subject: `Action Required — Document Verification Failed | ${BRAND}`,
+        html: htmlShell('Document Verification Failed', `
+            <p>Hi <strong>${booking.customerName}</strong>,</p>
+            <p>We were unable to verify the documents submitted for your booking <strong>${refNo}</strong>.</p>
+            ${bookingTable(booking, carTitle)}
+            ${reason ? `
+            <div style="background:#fef2f2;border-left:4px solid #ef4444;border-radius:0 8px 8px 0;padding:14px 18px;margin:16px 0">
+                <p style="margin:0 0 4px;font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#991b1b">Reason for rejection</p>
+                <p style="margin:0;font-size:.9rem;color:#7f1d1d">${reason}</p>
+            </div>` : ''}
+            <p>To proceed with your rental, please <strong>submit new or corrected documents</strong> by contacting our support team. Common reasons for rejection include:</p>
+            <ul style="padding-left:20px;line-height:2;color:#374151">
+                <li>Blurry or unreadable images</li>
+                <li>Expired identification documents</li>
+                <li>Documents that do not match the booking name</li>
+                <li>Missing required pages or sections</li>
+            </ul>
+            <p>Please contact us as soon as possible if you wish to reschedule or resubmit your documents.</p>
+            <p>We apologize for the inconvenience.</p>
+        `, '#dc2626'),
+    };
+}

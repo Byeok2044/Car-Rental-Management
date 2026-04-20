@@ -8,15 +8,27 @@ const bookingSchema = new mongoose.Schema({
     endDate:        { type: Date,   required: true },
     rentalDays:     { type: Number, required: true, min: 1 },
     pickupLocation: { type: String, trim: true },
-    status:         { type: String, enum: ['Pending', 'Active', 'Completed', 'Cancelled'], default: 'Pending' },
+    status: {
+        type: String,
+        // Unverified → Pending → Active → Completed
+        enum: ['Unverified', 'Pending', 'Active', 'Completed', 'Cancelled'],
+        default: 'Unverified',
+    },
 
     // KYC documents — array of Cloudinary secure URLs uploaded at booking time
-    // e.g. ["https://res.cloudinary.com/.../kyc_docs/id_front.jpg",
-    //        "https://res.cloudinary.com/.../kyc_docs/selfie.jpg"]
     kycDocUrls:     { type: [String], default: [] },
 
     // Customer type flag so admin knows what docs to expect
     customerType:   { type: String, enum: ['individual', 'business'], default: 'individual' },
+
+    // Document verification tracking
+    docsVerified:   { type: Boolean, default: false },
+    docsVerifiedAt: { type: Date,    default: null },
+    docsVerifiedBy: { type: String,  default: null }, // admin username or id
+    docsRejected:   { type: Boolean, default: false },
+    docsRejectedAt: { type: Date,    default: null },
+    docsRejectReason: { type: String, trim: true, default: '' },
+
 }, { timestamps: true });
 
 export default mongoose.models.Booking || mongoose.model('Booking', bookingSchema, 'bookings');
