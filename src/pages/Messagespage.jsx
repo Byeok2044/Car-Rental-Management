@@ -70,87 +70,89 @@ function UrgencySummaryBar({ messages, activeUrgency, onUrgencyFilter }) {
     const high   = messages.filter(m => m.urgency === 'high').length;
     const medium = messages.filter(m => m.urgency === 'medium').length;
     const low    = messages.filter(m => m.urgency === 'low').length;
-    const unclassified = messages.filter(m => !m.urgency).length;
-    const highUnread   = messages.filter(m => m.urgency === 'high' && m.status === 'Unread').length;
+    const highUnread = messages.filter(m => m.urgency === 'high' && m.status === 'Unread').length;
 
     if (messages.length === 0) return null;
 
     const cards = [
         {
-            key:   'high',
-            label: 'High Urgency',
-            count: high,
-            sub:   highUnread > 0 ? `${highUnread} unread` : 'all read',
-            icon:  '🔴',
-            bg:    activeUrgency === 'high' ? '#fee2e2' : '#fff',
+            key:    'high',
+            label:  'High urgency',
+            count:  high,
+            sub:    highUnread > 0 ? `${highUnread} unread` : 'all read',
+            badge:  highUnread > 0 ? `⚠ ${highUnread} unread` : null,
+            bg:     activeUrgency === 'high' ? '#fee2e2' : '#fff',
             border: activeUrgency === 'high' ? '#ef4444' : '#fca5a5',
-            color: '#991b1b',
+            color:  '#991b1b',
+            dot:    '#ef4444',
         },
         {
-            key:   'medium',
-            label: 'Medium Urgency',
-            count: medium,
-            sub:   'booking inquiries',
-            icon:  '🟡',
-            bg:    activeUrgency === 'medium' ? '#fef9c3' : '#fff',
+            key:    'medium',
+            label:  'Medium urgency',
+            count:  medium,
+            sub:    'booking inquiries',
+            badge:  null,
+            bg:     activeUrgency === 'medium' ? '#fef9c3' : '#fff',
             border: activeUrgency === 'medium' ? '#f59e0b' : '#fde68a',
-            color: '#854d0e',
+            color:  '#854d0e',
+            dot:    '#f59e0b',
         },
         {
-            key:   'low',
-            label: 'Low Urgency',
-            count: low,
-            sub:   'feedback & general',
-            icon:  '🟢',
-            bg:    activeUrgency === 'low' ? '#f0fdf4' : '#fff',
+            key:    'low',
+            label:  'Low urgency',
+            count:  low,
+            sub:    'feedback & general',
+            badge:  null,
+            bg:     activeUrgency === 'low' ? '#f0fdf4' : '#fff',
             border: activeUrgency === 'low' ? '#22c55e' : '#bbf7d0',
-            color: '#166534',
-        },
-        {
-            key:   null,
-            label: 'Unclassified',
-            count: unclassified,
-            sub:   'no urgency set',
-            icon:  '⚪',
-            bg:    '#fff',
-            border: '#e2e8f0',
-            color: '#64748b',
+            color:  '#166534',
+            dot:    '#22c55e',
         },
     ];
 
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
             {cards.map(c => (
                 <button
-                    key={String(c.key)}
+                    key={c.key}
                     onClick={() => onUrgencyFilter(activeUrgency === c.key ? null : c.key)}
                     style={{
                         background: c.bg,
                         border: `1.5px solid ${c.border}`,
                         borderRadius: 12,
-                        padding: '14px 16px',
-                        cursor: c.key !== null ? 'pointer' : 'default',
+                        padding: '16px 18px',
+                        cursor: 'pointer',
                         textAlign: 'left',
                         transition: 'transform 0.15s, box-shadow 0.15s',
                         boxShadow: activeUrgency === c.key
                             ? '0 4px 14px rgba(0,0,0,0.12)'
                             : '0 1px 4px rgba(0,0,0,0.05)',
-                        transform: activeUrgency === c.key ? 'translateY(-1px)' : 'none',
+                        transform: activeUrgency === c.key ? 'translateY(-2px)' : 'none',
                         fontFamily: 'inherit',
                     }}
                 >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                        <span style={{ fontSize: '0.72rem', fontWeight: 700, color: c.color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                        <span style={{ fontSize: '0.7rem', fontWeight: 700, color: c.color, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
                             {c.label}
                         </span>
-                        <span style={{ fontSize: '1rem' }}>{c.icon}</span>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: c.dot, display: 'inline-block', flexShrink: 0 }} />
                     </div>
-                    <p style={{ margin: 0, fontSize: '1.6rem', fontWeight: 800, color: c.color, lineHeight: 1 }}>
+                    <p style={{ margin: 0, fontSize: '2rem', fontWeight: 800, color: c.color, lineHeight: 1 }}>
                         {c.count}
                     </p>
                     <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: c.color, opacity: 0.7 }}>
                         {c.sub}
                     </p>
+                    {c.badge && (
+                        <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            marginTop: 8, fontSize: '0.7rem', fontWeight: 700,
+                            padding: '2px 8px', borderRadius: 20,
+                            background: '#fee2e2', border: '1px solid #fca5a5', color: '#991b1b',
+                        }}>
+                            {c.badge}
+                        </span>
+                    )}
                 </button>
             ))}
         </div>
