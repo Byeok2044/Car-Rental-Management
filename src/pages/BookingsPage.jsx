@@ -5,14 +5,17 @@ import KycDocsPanel from '../features/KycDocsPanel.jsx';
 const API_BASE_URL  = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const PER_PAGE      = 10;
 
-// Updated: Unverified is the new initial status
+// Status flow:
+//   Unverified → (verify-docs) → Pending → (payment) → Active → (full payment) → Completed
+//   Any stock-holding status can be Cancelled (restores stock)
+//
+// STATUS_TRANSITIONS defines which buttons appear in the drawer status banner.
+// 'Pending' is intentionally absent from manual transitions — it is only reachable
+// via the DocVerificationPanel's "Verify Documents" action.
 const STATUS_FILTERS = ['All', 'Unverified', 'Pending', 'Active', 'Completed', 'Cancelled'];
 
-// Unverified → (verify docs) → Pending → (payment recorded) → Active → (fully paid) → Completed
-// Note: status transitions via buttons only cover Pending→Active and Active→Completed/Cancelled
-// Unverified→Pending is handled exclusively by the verify-docs action
 const STATUS_TRANSITIONS = {
-    Unverified: [],       // handled by verify/reject doc buttons
+    Unverified: [],                      // Handled exclusively by DocVerificationPanel
     Pending:    ['Active', 'Cancelled'],
     Active:     ['Completed', 'Cancelled'],
     Completed:  [],
@@ -169,7 +172,7 @@ function DocVerificationPanel({ booking, onVerified, onRejected }) {
         }
     }
 
-    // Already past the Unverified stage — show compact summary
+    // Past the Unverified stage — show compact summary
     if (booking.status !== 'Unverified') {
         if (!isVerified && !isRejected) return null;
         return (
@@ -214,7 +217,6 @@ function DocVerificationPanel({ booking, onVerified, onRejected }) {
         <div className="bp-drawer__section">
             <p className="bp-drawer__label">Document Verification</p>
 
-            {/* Status indicator */}
             <div style={{
                 display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px',
                 background: '#fffbeb', border: '1.5px solid #fde68a',
@@ -242,14 +244,15 @@ function DocVerificationPanel({ booking, onVerified, onRejected }) {
                 </div>
             </div>
 
-            {/* Workflow explanation */}
             <div style={{
                 background: '#f0f7ff', border: '1px solid #bfdbfe', borderRadius: 8,
                 padding: '10px 14px', marginBottom: 14, fontSize: '0.78rem', color: '#1e40af', lineHeight: 1.6,
             }}>
-                <strong>Verification workflow:</strong> Review the documents in the KYC section below.
-                Verifying will move the booking to <strong>Pending</strong> and email the customer.
-                Rejecting will cancel the booking and notify the customer with your reason.
+                <strong>Verification workflow:</strong> Review the KYC documents below.
+                Verifying moves the booking to <strong>Pending</strong> and emails the customer a confirmation.
+                Rejecting cancels the booking, restores vehicle stock, and notifies the customer with your reason.
+                <br/><br/>
+                <strong>⚠ Quoting and payment recording are locked until documents are verified.</strong>
             </div>
 
             {error && (
@@ -264,7 +267,6 @@ function DocVerificationPanel({ booking, onVerified, onRejected }) {
 
             {!showRejectForm ? (
                 <div style={{ display: 'flex', gap: 8 }}>
-                    {/* Verify button */}
                     <button
                         onClick={handleVerify}
                         disabled={!hasDocs || verifying || rejecting}
@@ -278,6 +280,7 @@ function DocVerificationPanel({ booking, onVerified, onRejected }) {
                             opacity: (!hasDocs || verifying) ? 0.6 : 1,
                             transition: 'all 0.15s',
                         }}
+                        title={!hasDocs ? 'No documents to verify' : 'Verify documents and move to Pending'}
                     >
                         {verifying ? (
                             <>
@@ -297,7 +300,6 @@ function DocVerificationPanel({ booking, onVerified, onRejected }) {
                         )}
                     </button>
 
-                    {/* Reject button */}
                     <button
                         onClick={() => setShowRejectForm(true)}
                         disabled={verifying || rejecting}
@@ -319,7 +321,6 @@ function DocVerificationPanel({ booking, onVerified, onRejected }) {
                     </button>
                 </div>
             ) : (
-                /* Reject form */
                 <div style={{
                     background: '#fef2f2', border: '1.5px solid #fecaca',
                     borderRadius: 10, padding: 14,
@@ -329,7 +330,7 @@ function DocVerificationPanel({ booking, onVerified, onRejected }) {
                             <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
                             <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
                         </svg>
-                        Reject Documents — This will cancel the booking
+                        Reject Documents — This will cancel the booking and restore stock
                     </p>
                     <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                         Reason for rejection (recommended)
@@ -348,7 +349,7 @@ function DocVerificationPanel({ booking, onVerified, onRejected }) {
                         }}
                     />
                     <p style={{ margin: '0 0 10px', fontSize: '0.73rem', color: '#7f1d1d' }}>
-                        The customer will receive an email with this reason. Stock will be restored.
+                        The customer will receive an email with this reason. Vehicle stock will be restored automatically.
                     </p>
                     <div style={{ display: 'flex', gap: 8 }}>
                         <button
@@ -403,6 +404,7 @@ function PaymentPanel({ booking, onUpdated }) {
     const [saving,      setSaving]      = useState(false);
     const [error,       setError]       = useState('');
 
+    // Quote/payment only available for Pending or Active (docs verified)
     const canQuote = booking.status === 'Pending' || booking.status === 'Active';
 
     useEffect(() => {
@@ -455,7 +457,7 @@ function PaymentPanel({ booking, onUpdated }) {
         <div className="bp-drawer__section">
             <p className="bp-drawer__label">Payment</p>
 
-            {/* Unverified — show lock message */}
+            {/* Locked for Unverified */}
             {booking.status === 'Unverified' && (
                 <div style={{
                     display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px',
@@ -466,11 +468,41 @@ function PaymentPanel({ booking, onUpdated }) {
                         <rect x="3" y="11" width="18" height="11" rx="2"/>
                         <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                     </svg>
-                    Quote & payment become available after documents are verified.
+                    Quote &amp; payment are locked until documents are verified.
                 </div>
             )}
 
-            {booking.status !== 'Unverified' && (
+            {/* Locked for terminal statuses */}
+            {(booking.status === 'Completed' || booking.status === 'Cancelled') && (
+                <div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8, alignItems: 'center' }}>
+                        <PaymentPill status={booking.paymentStatus || 'Unpaid'} />
+                        {booking.quotedPrice && (
+                            <span style={{ fontSize: '0.85rem', color: '#111827', fontWeight: 600 }}>
+                                Quote: {fmtCur(booking.quotedPrice)}
+                            </span>
+                        )}
+                        {booking.amountPaid > 0 && (
+                            <span style={{ fontSize: '0.82rem', color: '#16a34a', fontWeight: 600 }}>
+                                Paid: {fmtCur(booking.amountPaid)}
+                            </span>
+                        )}
+                    </div>
+                    {booking.paymentMethod && (
+                        <p style={{ margin: 0, fontSize: '0.82rem', color: '#6b7280' }}>
+                            via <strong>{booking.paymentMethod}</strong>
+                        </p>
+                    )}
+                    {booking.paymentNotes && (
+                        <p style={{ fontSize: '0.82rem', color: '#374151', margin: '6px 0 0', background: '#f8fafc', padding: '8px 12px', borderRadius: 6, borderLeft: '3px solid #e2e8f0' }}>
+                            {booking.paymentNotes}
+                        </p>
+                    )}
+                </div>
+            )}
+
+            {/* Active payment UI for Pending / Active */}
+            {canQuote && (
                 <>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
                         <PaymentPill status={booking.paymentStatus || 'Unpaid'} />
@@ -512,41 +544,39 @@ function PaymentPanel({ booking, onUpdated }) {
                         </p>
                     )}
 
-                    {canQuote && (
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-                            <button onClick={() => { setShowQuote(v => !v); setShowPayment(false); setError(''); }}
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                        <button onClick={() => { setShowQuote(v => !v); setShowPayment(false); setError(''); }}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
+                                background: showQuote ? '#f1f5f9' : '#1e40af',
+                                color: showQuote ? '#111827' : '#fff',
+                                border: showQuote ? '1.5px solid #e2e8f0' : 'none',
+                                borderRadius: 8, cursor: 'pointer', fontSize: '0.82rem',
+                                fontWeight: 700, fontFamily: 'inherit', transition: 'all 0.15s',
+                            }}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                            </svg>
+                            {booking.quotedPrice ? 'Update Quote' : 'Set Quote'}
+                        </button>
+
+                        {booking.quotedPrice && (
+                            <button onClick={() => { setShowPayment(v => !v); setShowQuote(false); setError(''); }}
                                 style={{
                                     display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
-                                    background: showQuote ? '#f1f5f9' : '#1e40af',
-                                    color: showQuote ? '#111827' : '#fff',
-                                    border: showQuote ? '1.5px solid #e2e8f0' : 'none',
+                                    background: showPayment ? '#f1f5f9' : '#065f46',
+                                    color: showPayment ? '#111827' : '#fff',
+                                    border: showPayment ? '1.5px solid #e2e8f0' : 'none',
                                     borderRadius: 8, cursor: 'pointer', fontSize: '0.82rem',
                                     fontWeight: 700, fontFamily: 'inherit', transition: 'all 0.15s',
                                 }}>
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                                    <polyline points="20 6 9 17 4 12"/>
                                 </svg>
-                                {booking.quotedPrice ? 'Update Quote' : 'Set Quote'}
+                                Record Payment
                             </button>
-
-                            {booking.quotedPrice && (
-                                <button onClick={() => { setShowPayment(v => !v); setShowQuote(false); setError(''); }}
-                                    style={{
-                                        display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
-                                        background: showPayment ? '#f1f5f9' : '#065f46',
-                                        color: showPayment ? '#111827' : '#fff',
-                                        border: showPayment ? '1.5px solid #e2e8f0' : 'none',
-                                        borderRadius: 8, cursor: 'pointer', fontSize: '0.82rem',
-                                        fontWeight: 700, fontFamily: 'inherit', transition: 'all 0.15s',
-                                    }}>
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                        <polyline points="20 6 9 17 4 12"/>
-                                    </svg>
-                                    Record Payment
-                                </button>
-                            )}
-                        </div>
-                    )}
+                        )}
+                    </div>
 
                     {showQuote && (
                         <div style={{ background: '#eff6ff', border: '1.5px solid #bfdbfe', borderRadius: 10, padding: 14, marginTop: 4 }}>
@@ -608,7 +638,7 @@ function PaymentPanel({ booking, onUpdated }) {
                             />
                             {amountPaid !== '' && !isNaN(amountPaid) && booking.quotedPrice && (
                                 <div style={{ background: '#ecfdf5', padding: '8px 12px', borderRadius: 6, marginBottom: 10, fontSize: '0.82rem', color: '#065f46', fontWeight: 600 }}>
-                                    Status will be set to: {Number(amountPaid) >= booking.quotedPrice ? 'Paid' : Number(amountPaid) > 0 ? 'Partially Paid' : 'Unpaid'}
+                                    Status will be set to: {Number(amountPaid) >= booking.quotedPrice ? 'Paid ✓' : Number(amountPaid) > 0 ? 'Partially Paid' : 'Unpaid'}
                                     {Number(amountPaid) > 0 && Number(amountPaid) < booking.quotedPrice &&
                                         ` (Balance: ${fmtCur(booking.quotedPrice - Number(amountPaid))})`}
                                 </div>
@@ -812,19 +842,19 @@ function BookingDrawer({ booking: initialBooking, onClose, onStatusChange, onBoo
     function handleDocRejected(updatedBooking) {
         setBooking(updatedBooking);
         onBookingUpdate(updatedBooking);
-        // Optionally close drawer after rejection since booking is now Cancelled
     }
 
+    // Print receipt — only for Completed bookings
     const handlePrint = async () => {
         try {
-            const token = getToken();
+            const token    = getToken();
             const response = await fetch(`${API_BASE_URL}/api/admin/bookings/${booking._id}/receipt`, {
                 headers: { 'Authorization': `Bearer ${token}` },
             });
-            if (!response.ok) throw new Error('Server failed to generate the professional receipt.');
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const printWindow = window.open(url, '_blank');
+            if (!response.ok) throw new Error('Server failed to generate the receipt.');
+            const blob         = await response.blob();
+            const url          = window.URL.createObjectURL(blob);
+            const printWindow  = window.open(url, '_blank');
             if (printWindow) setTimeout(() => window.URL.revokeObjectURL(url), 10000);
         } catch (err) {
             alert('Could not generate receipt: ' + err.message);
@@ -841,17 +871,23 @@ function BookingDrawer({ booking: initialBooking, onClose, onStatusChange, onBoo
                             <p className="bp-drawer__ref">#{String(booking._id).slice(-8).toUpperCase()}</p>
                         </div>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                            {/* Print — only show for non-Unverified */}
-                            {booking.status !== 'Unverified' && (
-                                <button className="bp-drawer__action-btn" onClick={handlePrint} title="Print receipt">
+                            {/* ── Print Receipt — Completed bookings only ── */}
+                            {booking.status === 'Completed' && (
+                                <button
+                                    className="bp-drawer__action-btn"
+                                    onClick={handlePrint}
+                                    title="Print official receipt (PDF)"
+                                >
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                         <polyline points="6 9 6 2 18 2 18 9"/>
                                         <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
                                         <rect x="6" y="14" width="12" height="8"/>
                                     </svg>
-                                    Print
+                                    Print Receipt
                                 </button>
                             )}
+
+                            {/* ── Delete ── */}
                             <button
                                 onClick={() => setConfirm({ type: 'delete' })}
                                 disabled={deleting}
@@ -892,26 +928,26 @@ function BookingDrawer({ booking: initialBooking, onClose, onStatusChange, onBoo
                     </div>
 
                     <div className="bp-drawer__body">
-                        {/* ── Doc Verification (shown first for Unverified) */}
+                        {/* Doc Verification — shown first, most important for Unverified */}
                         <DocVerificationPanel
                             booking={booking}
                             onVerified={handleDocVerified}
                             onRejected={handleDocRejected}
                         />
 
-                        {/* ── Payment panel */}
+                        {/* Payment */}
                         <PaymentPanel
                             booking={booking}
                             onUpdated={(updated) => { setBooking(updated); onBookingUpdate(updated); }}
                         />
 
-                        {/* ── Date adjustment */}
+                        {/* Date adjustment */}
                         <AdjustBookingPanel
                             booking={booking}
                             onAdjusted={(updated) => { setBooking(updated); onBookingUpdate(updated); }}
                         />
 
-                        {/* ── Customer */}
+                        {/* Customer */}
                         <div className="bp-drawer__section">
                             <p className="bp-drawer__label">Customer</p>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -924,7 +960,7 @@ function BookingDrawer({ booking: initialBooking, onClose, onStatusChange, onBoo
                             </div>
                         </div>
 
-                        {/* ── Vehicle */}
+                        {/* Vehicle */}
                         <div className="bp-drawer__section">
                             <p className="bp-drawer__label">Vehicle</p>
                             {booking.carId?.image && <img src={booking.carId.image} alt={booking.carId.title} className="bp-drawer__car-img" />}
@@ -933,10 +969,10 @@ function BookingDrawer({ booking: initialBooking, onClose, onStatusChange, onBoo
                             {booking.qty > 1 && <span className="bp-drawer__qty-tag">× {booking.qty} units</span>}
                         </div>
 
-                        {/* ── KYC Docs */}
+                        {/* KYC Docs */}
                         <KycDocsPanel booking={booking} />
 
-                        {/* ── Rental Period */}
+                        {/* Rental Period */}
                         <div className="bp-drawer__section">
                             <p className="bp-drawer__label">Rental Period</p>
                             <div className="bp-drawer__dates">
@@ -977,11 +1013,11 @@ function BookingDrawer({ booking: initialBooking, onClose, onStatusChange, onBoo
                     message={`Change status to "${confirm.status}"?`}
                     subMessage={
                         confirm.status === 'Active'
-                            ? 'Booking must have at least a partial payment recorded.'
+                            ? 'Booking must have at least a partial payment recorded to become Active.'
                             : confirm.status === 'Completed'
-                            ? 'Booking must be fully paid to complete.'
+                            ? 'Booking must be fully paid to complete. A receipt PDF will be emailed to the customer.'
                             : confirm.status === 'Cancelled'
-                            ? 'This will restore vehicle stock.'
+                            ? 'This will cancel the booking and restore vehicle stock.'
                             : undefined
                     }
                     confirmLabel={confirm.label}
@@ -1160,7 +1196,6 @@ export default function BookingsPage() {
         return acc;
     }, {});
 
-    // Unverified count for alert badge
     const unverifiedCount = counts['Unverified'] || 0;
 
     function changeFilter(f) { setFilter(f); setPage(1); }
@@ -1187,7 +1222,7 @@ export default function BookingsPage() {
                             {unverifiedCount} booking{unverifiedCount !== 1 ? 's' : ''} awaiting document verification
                         </p>
                         <p style={{ margin: '2px 0 0', fontSize: '0.76rem', color: '#6b7280' }}>
-                            Review submitted KYC documents and verify or reject each booking before it can proceed.
+                            Review submitted KYC documents and verify or reject before proceeding. Quoting is locked until verified.
                         </p>
                     </div>
                     <button
@@ -1361,7 +1396,7 @@ export default function BookingsPage() {
                 </div>
             )}
 
-            {/* CSS for Unverified badge */}
+            {/* CSS extras */}
             <style>{`
                 .bp-badge--unverified { background: #fef9c3; color: #854d0e; border: 1px solid #fde68a; }
                 .bp-drawer__status-banner--unverified { background: #fffbeb; }

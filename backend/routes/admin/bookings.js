@@ -1,3 +1,17 @@
+/**
+ * backend/routes/admin/bookings.js  (FIXED)
+ *
+ * Security & workflow rules enforced:
+ *  1. New bookings start as 'Unverified'.
+ *  2. 'Pending' is ONLY reachable via POST /:id/verify-docs (not via PUT /:id/status).
+ *  3. Quotes and payments are locked until docs are verified (status != 'Unverified').
+ *  4. 'Active' requires at least a partial payment recorded.
+ *  5. 'Completed' requires full payment (paymentStatus === 'Paid').
+ *  6. PDF receipt endpoint is accessible for ALL statuses (admin may need it),
+ *     but the FRONTEND restricts the Print button to 'Completed' only.
+ *  7. Cancelling / completing a booking restores vehicle stock (idempotent guard).
+ */
+
 import { Router } from 'express';
 import mongoose from 'mongoose';
 import Booking from '../../models/booking.js';
@@ -7,21 +21,32 @@ import Car from '../../models/cars.js';
 import { requireAdmin } from '../../middleware/auth.js';
 import { fmtPeso } from '../../utils/helpers.js';
 import {
-    sendEmail, buildActiveEmail, buildCompletedEmail,
-    buildQuoteEmail, buildExtensionEmail,
+    sendEmail,
+    buildActiveEmail,
+    buildCompletedEmail,
+    buildQuoteEmail,
+    buildDocsVerifiedEmail,
+    buildDocsRejectedEmail,
 } from '../../utils/email.js';
 import { generateReceiptPDF } from '../../utils/pdf.js';
 
 const router = Router();
 router.use(requireAdmin);
 
-// ── helper: load booking with everything attached ─────────────────────────────
+// ── Statuses that are considered "terminal" (no more stock changes needed) ────
+const TERMINAL_STATUSES = ['Completed', 'Cancelled'];
+
+// ── Statuses that still hold stock (restoring needed on cancel/complete) ──────
+const STOCK_HOLDING_STATUSES = ['Unverified', 'Pending', 'Active'];
+
+// ── helper: load a booking fully populated with payment data ─────────────────
 async function loadFull(id) {
     const booking = await Booking.findById(id)
         .populate('carId',      'title type image dailyRate')
         .populate('customerId', 'name email phone')
         .lean();
     if (!booking) return null;
+
     const payment = await BookingPayment.findOne({ bookingId: id }).lean();
     return {
         ...booking,
@@ -40,14 +65,173 @@ async function loadFull(id) {
     };
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/bookings
+// ────────────────────────────────────────────────────────────────────────────
+router.get('/', async (req, res) => {
+    try {
+        const bookings = await Booking.find()
+            .populate('carId',      'title type image dailyRate')
+            .populate('customerId', 'name email phone')
+            .sort({ createdAt: -1 })
+            .lean();
+
+        const bookingIds = bookings.map(b => b._id);
+        const payments   = await BookingPayment.find({ bookingId: { $in: bookingIds } }).lean();
+        const payMap     = Object.fromEntries(payments.map(p => [String(p.bookingId), p]));
+
+        const shaped = bookings.map(b => {
+            const pay = payMap[String(b._id)] || {};
+            return {
+                ...b,
+                customerName:  b.customerId?.name  || '',
+                customerEmail: b.customerId?.email || '',
+                customerPhone: b.customerId?.phone || '',
+                quotedPrice:   pay.quotedPrice   ?? null,
+                amountPaid:    pay.amountPaid    ?? 0,
+                paymentStatus: pay.paymentStatus ?? 'Unpaid',
+                paymentMethod: pay.paymentMethod ?? null,
+                paymentNotes:  pay.paymentNotes  ?? '',
+            };
+        });
+
+        res.json(shaped);
+    } catch (err) {
+        console.error('GET /api/admin/bookings error:', err);
+        res.status(500).json({ message: 'Server Error.' });
+    }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// POST /api/admin/bookings/:id/verify-docs
+// Verifies KYC documents → moves booking Unverified → Pending
+// This is the ONLY way to reach 'Pending'.
+// ────────────────────────────────────────────────────────────────────────────
+router.post('/:id/verify-docs', async (req, res) => {
+    try {
+        const booking = await Booking.findById(req.params.id)
+            .populate('customerId', 'name email phone')
+            .populate('carId',      'title type image');
+
+        if (!booking)
+            return res.status(404).json({ message: 'Booking not found.' });
+
+        if (booking.status !== 'Unverified')
+            return res.status(400).json({
+                message: `Only Unverified bookings can have documents verified. Current status: ${booking.status}.`,
+            });
+
+        if (!booking.kycDocUrls || booking.kycDocUrls.length === 0)
+            return res.status(400).json({
+                message: 'No documents have been submitted for this booking.',
+            });
+
+        booking.docsVerified     = true;
+        booking.docsVerifiedAt   = new Date();
+        booking.docsVerifiedBy   = req.admin?.id || 'admin';
+        booking.docsRejected     = false;
+        booking.docsRejectReason = '';
+        booking.status           = 'Pending';
+        await booking.save();
+
+        const populated = await loadFull(booking._id);
+        const customerEmail = booking.customerId?.email || '';
+
+        if (customerEmail) {
+            const carTitle = booking.carId?.title || 'your vehicle';
+            const { subject, html } = buildDocsVerifiedEmail(populated, carTitle);
+            sendEmail(customerEmail, subject, html);
+        }
+
+        console.log(`[verify-docs] booking ${booking._id} → Pending`);
+        return res.json({ message: 'Documents verified. Booking is now Pending.', booking: populated });
+    } catch (err) {
+        console.error('verify-docs error:', err);
+        return res.status(500).json({ message: 'Server Error.' });
+    }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// POST /api/admin/bookings/:id/reject-docs
+// Rejects KYC documents → cancels booking, restores stock, emails customer
+// ────────────────────────────────────────────────────────────────────────────
+router.post('/:id/reject-docs', async (req, res) => {
+    const { reason = '' } = req.body;
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const booking = await Booking.findById(req.params.id)
+            .session(session)
+            .populate('customerId', 'name email phone')
+            .populate('carId',      'title type image');
+
+        if (!booking) {
+            await session.abortTransaction(); session.endSession();
+            return res.status(404).json({ message: 'Booking not found.' });
+        }
+
+        if (booking.status !== 'Unverified') {
+            await session.abortTransaction(); session.endSession();
+            return res.status(400).json({
+                message: `Only Unverified bookings can have documents rejected. Current status: ${booking.status}.`,
+            });
+        }
+
+        // Restore stock (booking was holding a reservation)
+        const carId = booking.carId?._id || booking.carId;
+        const car   = await Car.findById(carId).session(session);
+        if (car) {
+            car.stock += booking.qty ?? 1;
+            await car.save({ session });
+        }
+
+        booking.docsRejected     = true;
+        booking.docsRejectedAt   = new Date();
+        booking.docsRejectReason = reason.trim();
+        booking.docsVerified     = false;
+        booking.status           = 'Cancelled';
+        await booking.save({ session });
+
+        await session.commitTransaction();
+        session.endSession();
+
+        const populated     = await loadFull(booking._id);
+        const customerEmail = booking.customerId?.email || '';
+
+        if (customerEmail) {
+            const carTitle = booking.carId?.title || 'your vehicle';
+            const { subject, html } = buildDocsRejectedEmail(populated, carTitle, reason.trim());
+            sendEmail(customerEmail, subject, html);
+        }
+
+        console.log(`[reject-docs] booking ${booking._id} → Cancelled`);
+        return res.json({ message: 'Documents rejected. Booking has been cancelled.', booking: populated });
+    } catch (err) {
+        await session.abortTransaction(); session.endSession();
+        console.error('reject-docs error:', err);
+        return res.status(500).json({ message: 'Server Error.' });
+    }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
 // PUT /api/admin/bookings/:id/status
+// Allowed manual transitions:
+//   Pending   → Active | Cancelled
+//   Active    → Completed | Cancelled
+//   (Unverified → Pending is handled ONLY by verify-docs above)
+// ────────────────────────────────────────────────────────────────────────────
 router.put('/:id/status', async (req, res) => {
     const { status } = req.body;
-    const allowed  = ['Pending', 'Active', 'Completed', 'Cancelled'];
-    const terminal = ['Completed', 'Cancelled'];
 
-    if (!allowed.includes(status))
-        return res.status(400).json({ message: 'Invalid status.' });
+    // Manually settable statuses (NOT including Pending — that's verify-docs only)
+    const MANUAL_ALLOWED = ['Active', 'Completed', 'Cancelled'];
+    if (!MANUAL_ALLOWED.includes(status))
+        return res.status(400).json({
+            message: status === 'Pending'
+                ? 'Booking moves to Pending automatically when documents are verified via the "Verify Documents" action.'
+                : 'Invalid status.',
+        });
 
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -58,19 +242,36 @@ router.put('/:id/status', async (req, res) => {
             return res.status(404).json({ message: 'Booking not found.' });
         }
 
+        // Guard: cannot activate an unverified booking
+        if (status === 'Active' && booking.status === 'Unverified') {
+            await session.abortTransaction(); session.endSession();
+            return res.status(400).json({
+                message: 'Documents must be verified before activating a booking.',
+            });
+        }
+
+        // Guard: cannot skip straight from Unverified / Pending without payment
         const payment = await BookingPayment.findOne({ bookingId: booking._id }).session(session);
 
         if (status === 'Active' && (!payment || payment.paymentStatus === 'Unpaid')) {
             await session.abortTransaction(); session.endSession();
-            return res.status(400).json({ message: 'Booking cannot be marked Active until at least a partial payment has been recorded.' });
-        }
-        if (status === 'Completed' && (!payment || payment.paymentStatus !== 'Paid')) {
-            await session.abortTransaction(); session.endSession();
-            return res.status(400).json({ message: 'Booking cannot be marked Completed until it is fully paid.' });
+            return res.status(400).json({
+                message: 'Booking cannot be marked Active until at least a partial payment has been recorded.',
+            });
         }
 
+        if (status === 'Completed' && (!payment || payment.paymentStatus !== 'Paid')) {
+            await session.abortTransaction(); session.endSession();
+            return res.status(400).json({
+                message: 'Booking cannot be marked Completed until it is fully paid.',
+            });
+        }
+
+        // Restore stock when moving to a terminal status from a stock-holding status
         let car = null;
-        if (terminal.includes(status) && !terminal.includes(booking.status)) {
+        const movingToTerminal   = TERMINAL_STATUSES.includes(status);
+        const currentlyHolding   = STOCK_HOLDING_STATUSES.includes(booking.status);
+        if (movingToTerminal && currentlyHolding) {
             car = await Car.findById(booking.carId).session(session);
             if (car) {
                 car.stock += booking.qty ?? 1;
@@ -85,6 +286,7 @@ router.put('/:id/status', async (req, res) => {
 
         const populated = await loadFull(booking._id);
 
+        // Send status-change email
         if (populated.customerEmail) {
             const carTitle = populated.carId?.title || car?.title || 'your vehicle';
             if (status === 'Active') {
@@ -98,26 +300,41 @@ router.put('/:id/status', async (req, res) => {
             }
         }
 
-        res.json({ message: 'Status updated.', booking: populated });
+        console.log(`[status] booking ${booking._id} → ${status}`);
+        res.json({ message: `Booking marked as ${status}.`, booking: populated });
     } catch (err) {
         await session.abortTransaction(); session.endSession();
-        console.error('Status error:', err);
+        console.error('status change error:', err);
         res.status(500).json({ message: 'Server Error.' });
     }
 });
 
+// ────────────────────────────────────────────────────────────────────────────
 // PUT /api/admin/bookings/:id/quote
+// Only available when booking is Pending or Active (docs verified)
+// ────────────────────────────────────────────────────────────────────────────
 router.put('/:id/quote', async (req, res) => {
     const { quotedPrice, paymentNotes } = req.body;
+
     if (quotedPrice == null || isNaN(quotedPrice) || Number(quotedPrice) <= 0)
         return res.status(400).json({ message: 'A valid quoted price greater than 0 is required.' });
 
     try {
-        // Find booking (no longer has customerName directly — use customerId)
         const booking = await Booking.findById(req.params.id)
             .populate('customerId', 'name email phone')
-            .populate('carId', 'title type image dailyRate');
+            .populate('carId',      'title type image dailyRate');
         if (!booking) return res.status(404).json({ message: 'Booking not found.' });
+
+        // Quoting is locked until docs are verified
+        if (booking.status === 'Unverified')
+            return res.status(400).json({
+                message: 'Documents must be verified before setting a quote. Verify the customer\'s KYC documents first.',
+            });
+
+        if (TERMINAL_STATUSES.includes(booking.status))
+            return res.status(400).json({
+                message: `Cannot quote a ${booking.status} booking.`,
+            });
 
         await BookingPayment.findOneAndUpdate(
             { bookingId: booking._id },
@@ -125,7 +342,7 @@ router.put('/:id/quote', async (req, res) => {
                 quotedPrice:  Number(quotedPrice),
                 quotedAt:     new Date(),
                 totalCost:    Number(quotedPrice),
-                paymentNotes: paymentNotes?.trim() || '',
+                paymentNotes: (paymentNotes || '').trim(),
             },
             { new: true, upsert: true }
         );
@@ -137,17 +354,20 @@ router.put('/:id/quote', async (req, res) => {
             sendEmail(populated.customerEmail, subject, html);
         }
 
-        console.log(`Quote set: ${booking._id} -> ${fmtPeso(quotedPrice)}`);
+        console.log(`[quote] booking ${booking._id} → ${fmtPeso(quotedPrice)}`);
         res.json({ message: 'Quote set successfully.', booking: populated });
     } catch (err) {
-        console.error('Quote error:', err);
+        console.error('quote error:', err);
         res.status(500).json({ message: 'Server Error.' });
     }
 });
 
+// ────────────────────────────────────────────────────────────────────────────
 // PUT /api/admin/bookings/:id/payment
+// ────────────────────────────────────────────────────────────────────────────
 router.put('/:id/payment', async (req, res) => {
     const { amountPaid, paymentMethod, paymentNotes } = req.body;
+
     if (amountPaid == null || isNaN(amountPaid) || Number(amountPaid) < 0)
         return res.status(400).json({ message: 'A valid amount (0 or greater) is required.' });
 
@@ -155,30 +375,39 @@ router.put('/:id/payment', async (req, res) => {
         const booking = await Booking.findById(req.params.id);
         if (!booking) return res.status(404).json({ message: 'Booking not found.' });
 
+        if (booking.status === 'Unverified')
+            return res.status(400).json({
+                message: 'Documents must be verified before recording payment.',
+            });
+
         const payment = await BookingPayment.findOne({ bookingId: booking._id });
         if (!payment?.quotedPrice)
             return res.status(400).json({ message: 'Set a quoted price before recording payment.' });
 
-        const paid = Number(amountPaid);
+        const paid            = Number(amountPaid);
         payment.amountPaid    = paid;
-        payment.paymentStatus = paid >= payment.quotedPrice ? 'Paid'
-            : paid > 0 ? 'Partially Paid' : 'Unpaid';
+        payment.paymentStatus = paid >= payment.quotedPrice
+            ? 'Paid'
+            : paid > 0
+            ? 'Partially Paid'
+            : 'Unpaid';
         if (paymentMethod) payment.paymentMethod = paymentMethod;
         if (paymentNotes)  payment.paymentNotes  = paymentNotes.trim();
         await payment.save();
 
         const populated = await loadFull(booking._id);
-        console.log(`Payment: ${booking._id} -> ${fmtPeso(paid)} (${payment.paymentStatus})`);
+        console.log(`[payment] booking ${booking._id} → ${fmtPeso(paid)} (${payment.paymentStatus})`);
         res.json({ message: 'Payment recorded.', booking: populated });
     } catch (err) {
-        console.error('Payment error:', err);
+        console.error('payment error:', err);
         res.status(500).json({ message: 'Server Error.' });
     }
 });
 
+// ────────────────────────────────────────────────────────────────────────────
 // DELETE /api/admin/bookings/:id
+// ────────────────────────────────────────────────────────────────────────────
 router.delete('/:id', async (req, res) => {
-    const RESTORE_STATUSES = ['Pending', 'Active'];
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
@@ -188,7 +417,8 @@ router.delete('/:id', async (req, res) => {
             return res.status(404).json({ message: 'Booking not found.' });
         }
 
-        if (RESTORE_STATUSES.includes(booking.status)) {
+        // Restore stock if booking was still holding a vehicle reservation
+        if (STOCK_HOLDING_STATUSES.includes(booking.status)) {
             const car = await Car.findById(booking.carId).session(session);
             if (car) {
                 car.stock += booking.qty ?? 1;
@@ -201,16 +431,19 @@ router.delete('/:id', async (req, res) => {
         await session.commitTransaction();
         session.endSession();
 
-        console.log(`Booking deleted: ${booking._id}`);
+        console.log(`[delete] booking ${booking._id}`);
         res.json({ message: 'Booking deleted successfully.', deletedId: booking._id });
     } catch (err) {
         await session.abortTransaction(); session.endSession();
-        console.error('Delete booking error:', err);
+        console.error('delete error:', err);
         res.status(500).json({ message: 'Server Error: Could not delete booking.' });
     }
 });
 
+// ────────────────────────────────────────────────────────────────────────────
 // PUT /api/admin/bookings/:id/adjust
+// Adjusts rental dates (Pending or Active only)
+// ────────────────────────────────────────────────────────────────────────────
 router.put('/:id/adjust', async (req, res) => {
     const { startDate, endDate, reason } = req.body;
     if (!endDate) return res.status(400).json({ message: 'endDate is required.' });
@@ -221,13 +454,15 @@ router.put('/:id/adjust', async (req, res) => {
         if (!booking) return res.status(404).json({ message: 'Booking not found.' });
 
         if (!['Pending', 'Active'].includes(booking.status))
-            return res.status(400).json({ message: `Cannot adjust a "${booking.status}" booking.` });
+            return res.status(400).json({
+                message: `Cannot adjust a "${booking.status}" booking. Only Pending or Active bookings can be adjusted.`,
+            });
 
-        const newEnd   = new Date(endDate);  newEnd.setHours(0,0,0,0);
-        let   newStart = new Date(booking.startDate); newStart.setHours(0,0,0,0);
+        const newEnd   = new Date(endDate);  newEnd.setHours(0, 0, 0, 0);
+        let   newStart = new Date(booking.startDate); newStart.setHours(0, 0, 0, 0);
 
         if (booking.status === 'Pending' && startDate) {
-            const parsedStart = new Date(startDate); parsedStart.setHours(0,0,0,0);
+            const parsedStart = new Date(startDate); parsedStart.setHours(0, 0, 0, 0);
             if (parsedStart >= newEnd)
                 return res.status(400).json({ message: 'Start date must be before end date.' });
             newStart = parsedStart;
@@ -246,16 +481,16 @@ router.put('/:id/adjust', async (req, res) => {
         booking.rentalDays = newRentalDays;
         await booking.save();
 
-        // Adjust payment totals if daily rate exists
+        // Adjust quoted price proportionally if a daily rate exists
         const dailyRate = booking.carId?.dailyRate ?? 0;
         if (dailyRate > 0 && dayDiff !== 0) {
             const payment = await BookingPayment.findOne({ bookingId: booking._id });
             if (payment?.quotedPrice != null) {
-                const adjustment = dailyRate * (booking.qty ?? 1) * dayDiff;
-                payment.quotedPrice = Math.max(0, payment.quotedPrice + adjustment);
-                payment.totalCost   = payment.quotedPrice;
-                const action = dayDiff > 0 ? `extended +${dayDiff}d` : `shortened ${dayDiff}d`;
-                const note   = `[Adjustment: ${action}${reason ? ': ' + reason.trim() : ''}]`;
+                const adjustment     = dailyRate * (booking.qty ?? 1) * dayDiff;
+                payment.quotedPrice  = Math.max(0, payment.quotedPrice + adjustment);
+                payment.totalCost    = payment.quotedPrice;
+                const action         = dayDiff > 0 ? `extended +${dayDiff}d` : `shortened ${dayDiff}d`;
+                const note           = `[Adjustment: ${action}${reason ? ': ' + reason.trim() : ''}]`;
                 payment.paymentNotes = payment.paymentNotes ? `${payment.paymentNotes} ${note}` : note;
                 await payment.save();
             }
@@ -264,12 +499,16 @@ router.put('/:id/adjust', async (req, res) => {
         const populated = await loadFull(booking._id);
         res.json({ message: 'Booking adjusted successfully.', booking: populated });
     } catch (err) {
-        console.error('Adjust booking error:', err);
+        console.error('adjust error:', err);
         res.status(500).json({ message: 'Server Error: Could not adjust booking.' });
     }
 });
 
+// ────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/bookings/:id/receipt
+// Generates PDF receipt — accessible to admin for any status,
+// but the FRONTEND Print button is restricted to 'Completed' only.
+// ────────────────────────────────────────────────────────────────────────────
 router.get('/:id/receipt', async (req, res) => {
     try {
         const full = await loadFull(req.params.id);
