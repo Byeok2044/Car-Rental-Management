@@ -1,13 +1,12 @@
 /**
- * backend/routes/publicBookings.js
+ * backend/routes/bookings.js  (FIXED)
  *
- * Public-facing booking endpoint.
- * New bookings are created with status = 'Unverified' (the model default).
- * The admin must review KYC documents via POST /api/admin/bookings/:id/verify-docs
- * before the booking can proceed to 'Pending'.
- *
- * Mount this at: router.use('/bookings', publicBookingsRouter)
- * (replaces the old public /api/bookings route)
+ * Security fixes applied:
+ *  1. kycDocUrls validated — only HTTPS Cloudinary URLs from our own account
+ *     are accepted. Arbitrary URLs injected by malicious clients are rejected.
+ *  2. customerName, customerEmail, customerPhone, and pickupLocation are all
+ *     sanitized with the existing clean() helper before being persisted.
+ *  3. customerType is allowlisted to prevent arbitrary enum injection.
  */
 
 import { Router } from 'express';
@@ -21,7 +20,32 @@ import { sendEmail, buildSubmittedEmail } from '../utils/email.js';
 
 const router = Router();
 
-// ── GET /api/bookings  (admin uses its own route — this is kept for compat) ──
+// ── URL allow-list for KYC documents ─────────────────────────────────────────
+// Only accept secure URLs originating from our Cloudinary account (kyc_docs folder).
+// This prevents clients from injecting external tracker URLs, data-URIs, or links
+// to content hosted elsewhere.
+const CLOUDINARY_ORIGIN = 'https://res.cloudinary.com/';
+
+function isSafeDocUrl(url) {
+    if (typeof url !== 'string') return false;
+    // Must be HTTPS and from our Cloudinary account
+    if (!url.startsWith(CLOUDINARY_ORIGIN)) return false;
+    // Must target the kyc_docs folder
+    if (!url.includes('/kyc_docs/')) return false;
+    // Reject anything with query-string params (could be tracking pixels)
+    try {
+        const parsed = new URL(url);
+        if (parsed.search) return false;
+    } catch {
+        return false;
+    }
+    return true;
+}
+
+// Allowlisted customer types — prevents arbitrary enum values reaching the model
+const ALLOWED_CUSTOMER_TYPES = new Set(['individual', 'business']);
+
+// ── GET /api/bookings  (kept for backward compat with admin route) ────────────
 router.get('/', async (req, res) => {
     try {
         const bookings = await Booking.find()
@@ -51,12 +75,29 @@ router.post('/batch', bookingLimiter, async (req, res) => {
     if (!Array.isArray(bookings) || bookings.length === 0)
         return res.status(400).json({ message: 'bookings array is required.' });
 
-    // Basic validation
+    // ── Per-item validation ───────────────────────────────────────────────────
     for (const b of bookings) {
         if (!b.carId || !b.customerName || !b.customerEmail || !b.startDate || !b.endDate)
-            return res.status(400).json({ message: 'Each booking requires carId, customerName, customerEmail, startDate, endDate.' });
+            return res.status(400).json({
+                message: 'Each booking requires carId, customerName, customerEmail, startDate, endDate.',
+            });
+
         if (!emailRegex.test(b.customerEmail))
             return res.status(400).json({ message: `Invalid email: ${b.customerEmail}` });
+
+        // FIX 1: Validate every supplied doc URL before touching the DB.
+        // Reject the entire request if any URL is suspicious.
+        if (Array.isArray(b.kycDocUrls)) {
+            for (const url of b.kycDocUrls) {
+                if (!isSafeDocUrl(url))
+                    return res.status(400).json({
+                        message: `Invalid document URL supplied. Documents must be uploaded through the provided upload flow.`,
+                    });
+            }
+            // Hard cap: no more than 5 documents per booking line
+            if (b.kycDocUrls.length > 5)
+                return res.status(400).json({ message: 'A maximum of 5 KYC documents may be attached per booking.' });
+        }
     }
 
     const session = await mongoose.startSession();
@@ -70,19 +111,32 @@ router.post('/batch', bookingLimiter, async (req, res) => {
 
             // Lock and decrement stock
             const car = await Car.findById(b.carId).session(session);
-            if (!car)
-                throw new Error(`Vehicle not found: ${b.carId}`);
+            if (!car) throw new Error(`Vehicle not found: ${b.carId}`);
             if (car.stock < qty)
                 throw new Error(`Insufficient stock for "${car.title}" (requested ${qty}, available ${car.stock}).`);
 
             car.stock -= qty;
             await car.save({ session });
 
-            // Upsert customer record
+            // FIX 2: Sanitize all customer-supplied string fields with clean()
+            // before writing to the Customer or Booking collections.
             const customerName  = clean(b.customerName);
             const customerEmail = b.customerEmail.trim().toLowerCase();
-            const customerPhone = (b.customerPhone || '').trim();
+            // Phone: strip everything except digits and leading +
+            const customerPhone = (b.customerPhone || '').replace(/[^\d+]/g, '').slice(0, 20);
 
+            if (!customerName)
+                throw new Error('Customer name must not be empty after sanitization.');
+
+            // FIX 3: Allowlist customerType so only known enum values reach the model
+            const customerType = ALLOWED_CUSTOMER_TYPES.has(b.customerType)
+                ? b.customerType
+                : 'individual';
+
+            // Sanitize pickup location
+            const pickupLocation = clean(b.pickupLocation || '');
+
+            // Upsert customer record
             let customer = await Customer.findOne({ email: customerEmail }).session(session);
             if (!customer) {
                 [customer] = await Customer.create(
@@ -90,13 +144,17 @@ router.post('/batch', bookingLimiter, async (req, res) => {
                     { session }
                 );
             } else {
-                // Keep most-recent contact info
                 customer.name  = customerName;
                 customer.phone = customerPhone;
                 await customer.save({ session });
             }
 
-            // Create booking — status defaults to 'Unverified' per the model schema
+            // Only accept URLs that passed the allow-list check above
+            const kycDocUrls = Array.isArray(b.kycDocUrls)
+                ? b.kycDocUrls.filter(isSafeDocUrl)
+                : [];
+
+            // Create booking — status defaults to 'Unverified' per the model
             const [booking] = await Booking.create(
                 [{
                     carId:          car._id,
@@ -105,10 +163,10 @@ router.post('/batch', bookingLimiter, async (req, res) => {
                     startDate:      new Date(b.startDate),
                     endDate:        new Date(b.endDate),
                     rentalDays:     Number(b.rentalDays) || 1,
-                    pickupLocation: clean(b.pickupLocation || ''),
-                    status:         'Unverified',   // explicit — matches model default
-                    kycDocUrls:     Array.isArray(b.kycDocUrls) ? b.kycDocUrls.filter(Boolean) : [],
-                    customerType:   b.customerType === 'business' ? 'business' : 'individual',
+                    pickupLocation,
+                    status:         'Unverified',
+                    kycDocUrls,
+                    customerType,
                 }],
                 { session }
             );

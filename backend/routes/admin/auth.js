@@ -3,12 +3,12 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'node:crypto';
 import Admin from '../../models/Admin.js';
-import { requireAdmin, tokenBlacklist } from '../../middleware/auth.js';
+import { requireAdmin, revokeToken } from '../../middleware/auth.js'; // <-- updated import
 import { loginLimiter } from '../../middleware/rateLimiter.js';
 import { emailRegex, escapeRegex, hashToken, BRAND } from '../../utils/helpers.js';
 import { sendEmail, htmlShell } from '../../utils/email.js';
 
-const router  = Router();
+const router     = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'your_fallback_secret_key';
 
 // POST /api/admin/login
@@ -26,9 +26,9 @@ router.post('/login', loginLimiter, async (req, res) => {
             ],
         });
 
-        if (!user)                                                  return res.status(401).json({ message: 'User not found.' });
-        if (user.role !== 'admin')                                  return res.status(403).json({ message: 'Access denied.' });
-        if (!await bcrypt.compare(password, user.password))        return res.status(401).json({ message: 'Invalid credentials.' });
+        if (!user)                                           return res.status(401).json({ message: 'User not found.' });
+        if (user.role !== 'admin')                          return res.status(403).json({ message: 'Access denied.' });
+        if (!await bcrypt.compare(password, user.password)) return res.status(401).json({ message: 'Invalid credentials.' });
 
         const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '24h' });
         console.log('Login OK:', user.username);
@@ -40,9 +40,16 @@ router.post('/login', loginLimiter, async (req, res) => {
 });
 
 // POST /api/admin/logout
-router.post('/logout', requireAdmin, (req, res) => {
-    tokenBlacklist.add(req.token);
-    res.json({ message: 'Logged out successfully.' });
+router.post('/logout', requireAdmin, async (req, res) => {
+    try {
+        // Persist the revocation so it survives server restarts
+        await revokeToken(req.token, req.admin?.exp);
+        res.json({ message: 'Logged out successfully.' });
+    } catch (err) {
+        console.error('[logout] revocation failed:', err.message);
+        // Still return 200 — the client will discard the token locally
+        res.json({ message: 'Logged out.' });
+    }
 });
 
 // POST /api/admin/forgot-password
