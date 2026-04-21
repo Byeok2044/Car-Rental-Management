@@ -1,16 +1,3 @@
-/**
- * backend/routes/admin/bookings.js  (FIXED)
- *
- * Security & workflow rules enforced:
- *  1. New bookings start as 'Unverified'.
- *  2. 'Pending' is ONLY reachable via POST /:id/verify-docs (not via PUT /:id/status).
- *  3. Quotes and payments are locked until docs are verified (status != 'Unverified').
- *  4. 'Active' requires at least a partial payment recorded.
- *  5. 'Completed' requires full payment (paymentStatus === 'Paid').
- *  6. PDF receipt endpoint is accessible for ALL statuses (admin may need it),
- *     but the FRONTEND restricts the Print button to 'Completed' only.
- *  7. Cancelling / completing a booking restores vehicle stock (idempotent guard).
- */
 
 import { Router } from 'express';
 import mongoose from 'mongoose';
@@ -250,7 +237,7 @@ router.put('/:id/status', async (req, res) => {
             });
         }
 
-        // Guard: cannot skip straight from Unverified / Pending without payment
+        // Guard: require at least partial payment for Active
         const payment = await BookingPayment.findOne({ bookingId: booking._id }).session(session);
 
         if (status === 'Active' && (!payment || payment.paymentStatus === 'Unpaid')) {
@@ -260,6 +247,7 @@ router.put('/:id/status', async (req, res) => {
             });
         }
 
+        // Guard: require full payment for Completed
         if (status === 'Completed' && (!payment || payment.paymentStatus !== 'Paid')) {
             await session.abortTransaction(); session.endSession();
             return res.status(400).json({
@@ -269,8 +257,8 @@ router.put('/:id/status', async (req, res) => {
 
         // Restore stock when moving to a terminal status from a stock-holding status
         let car = null;
-        const movingToTerminal   = TERMINAL_STATUSES.includes(status);
-        const currentlyHolding   = STOCK_HOLDING_STATUSES.includes(booking.status);
+        const movingToTerminal = TERMINAL_STATUSES.includes(status);
+        const currentlyHolding = STOCK_HOLDING_STATUSES.includes(booking.status);
         if (movingToTerminal && currentlyHolding) {
             car = await Car.findById(booking.carId).session(session);
             if (car) {
@@ -328,7 +316,7 @@ router.put('/:id/quote', async (req, res) => {
         // Quoting is locked until docs are verified
         if (booking.status === 'Unverified')
             return res.status(400).json({
-                message: 'Documents must be verified before setting a quote. Verify the customer\'s KYC documents first.',
+                message: "Documents must be verified before setting a quote. Verify the customer's KYC documents first.",
             });
 
         if (TERMINAL_STATUSES.includes(booking.status))
@@ -506,13 +494,35 @@ router.put('/:id/adjust', async (req, res) => {
 
 // ────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/bookings/:id/receipt
-// Generates PDF receipt — accessible to admin for any status,
-// but the FRONTEND Print button is restricted to 'Completed' only.
+// SECURITY FIX: Receipt is ONLY available for 'Completed' bookings.
+// A receipt implies full payment and a closed rental — issuing one for
+// Unverified / Pending / Active bookings could create fraudulent-looking
+// documents. The frontend already restricts the Print button to Completed,
+// but this backend guard ensures the API cannot be called directly.
 // ────────────────────────────────────────────────────────────────────────────
 router.get('/:id/receipt', async (req, res) => {
     try {
+        const booking = await Booking.findById(req.params.id).lean();
+
+        if (!booking) {
+            return res.status(404).json({ message: 'Booking not found.' });
+        }
+
+        // ── SECURITY: only allow receipts for completed, fully-paid bookings ──
+        if (booking.status !== 'Completed') {
+            return res.status(403).json({
+                message: `Receipts can only be generated for Completed bookings. This booking is "${booking.status}".`,
+            });
+        }
+
         const full = await loadFull(req.params.id);
-        if (!full) return res.status(404).send('Booking not found');
+
+        // Double-check payment status as an extra guard
+        if (full.paymentStatus !== 'Paid') {
+            return res.status(403).json({
+                message: 'Receipts can only be generated for fully paid bookings.',
+            });
+        }
 
         const pdfBuffer = await generateReceiptPDF(full, full.carId?.title || 'Vehicle');
         res.set({
@@ -523,7 +533,7 @@ router.get('/:id/receipt', async (req, res) => {
         res.send(pdfBuffer);
     } catch (err) {
         console.error('PDF Receipt Error:', err);
-        res.status(500).send('Error generating receipt');
+        res.status(500).send('Error generating receipt.');
     }
 });
 
