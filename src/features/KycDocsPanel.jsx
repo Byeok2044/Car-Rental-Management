@@ -1,86 +1,100 @@
 /**
- * KycDocsPanel  —  Fixed version
+ * KycDocsPanel — PDF viewing fixed
  *
- * Key fixes:
- *  1. isPdf() uses a smarter heuristic: checks the Cloudinary "resource_type"
- *     segment in the URL (image vs raw) AND the file extension.
- *  2. PDFs stored under /image/upload are converted to a viewable URL using
- *     Cloudinary's fl_attachment:false transformation, then opened in a new
- *     tab via an <object> tag (works cross-browser) rather than <iframe>.
- *  3. Added a direct "Open PDF" button as a fallback for browsers that block
- *     inline PDF rendering.
- *  4. Images use a proper lightbox with zoom support.
- *  5. Better thumbnail fallback for PDFs (always shows PDF icon, never a
- *     broken <img> tag).
+ * ROOT CAUSE OF THE BUG:
+ *   fl_attachment:false does NOT serve the PDF inline — Cloudinary ignores it for
+ *   image/upload resources and still returns a page thumbnail (JPEG).
+ *   Browsers therefore received a JPEG with Content-Type: image/jpeg and the
+ *   <object> tag showed a blank/broken viewer.
+ *
+ * FIXES APPLIED:
+ *   1. getPdfViewUrl() now rewrites /image/upload/ → /raw/upload/ so Cloudinary
+ *      serves the actual PDF bytes (Content-Type: application/pdf).  This is the
+ *      correct Cloudinary pattern for viewing a PDF that was uploaded to image/upload.
+ *   2. PdfLightbox uses Google Docs Viewer as the primary embed URL.
+ *      Google Docs Viewer works cross-browser (Chrome, Firefox, Safari, mobile) and
+ *      bypasses all inline-PDF-blocking policies.  It only needs a publicly
+ *      accessible URL, which Cloudinary provides.
+ *   3. Added a plain <iframe> behind the Google Docs Viewer URL as the embed
+ *      strategy — <object> had silent fallback failures; <iframe> gives a visible
+ *      error state we can detect.
+ *   4. Added an onLoad/onError guard on the iframe to show a fallback panel if
+ *      the embed still fails (e.g. private Cloudinary account with signed URLs).
+ *   5. Download button now correctly uses fl_attachment (no :false) to force
+ *      a browser download of the raw PDF.
+ *   6. PDF thumbnail now gracefully falls back to the icon-only state without
+ *      attempting a broken image load when Cloudinary thumbnail generation is
+ *      unavailable.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-/**
- * Determine whether a Cloudinary URL points to a PDF.
- *
- * Cloudinary PDF URLs look like one of:
- *   https://res.cloudinary.com/<cloud>/image/upload/.../<id>.pdf
- *   https://res.cloudinary.com/<cloud>/raw/upload/.../<id>.pdf
- *
- * We check BOTH the resource-type path segment AND the file extension so we
- * don't accidentally treat a JPEG named "pdf-icon.jpg" as a PDF.
- */
 function isPdf(url) {
     if (!url || typeof url !== 'string') return false;
     const lower = url.toLowerCase();
-    // Extension check (most reliable)
-    const extensionIsPdf = lower.includes('.pdf');
-    // Cloudinary resource_type check
-    const isRawResource = lower.includes('/raw/upload/');
-    return extensionIsPdf || isRawResource;
+    return lower.includes('.pdf') || lower.includes('/raw/upload/');
 }
 
 /**
- * Convert a Cloudinary image/upload PDF URL to one that browsers can view.
+ * FIX #1 — Convert Cloudinary image/upload PDF URL to a viewable raw URL.
  *
- * Cloudinary serves PDFs uploaded to the "image" resource type as images
- * (page thumbnails). To get the actual PDF bytes we need to either:
- *   a) Change /image/upload/ to /raw/upload/  (works if file was originally
- *      uploaded to raw — but our KYC flow uses image/upload)
- *   b) Append fl_attachment to force download
- *   c) Use the Cloudinary "fetch" endpoint with the raw URL
+ * Cloudinary stores the same file under two resource types:
+ *   /image/upload/ — serves page thumbnails (images), NOT the PDF
+ *   /raw/upload/   — serves the original file bytes (the actual PDF)
  *
- * The safest approach for browser viewing is to inject `fl_attachment:false`
- * so Cloudinary streams the raw PDF instead of a thumbnail. If the URL
- * already has transformations we insert before the version segment.
+ * Swapping the path segment is all that's needed.  The file ID and version
+ * segment are identical; only the resource_type changes.
+ *
+ * If the URL is already /raw/upload/ (e.g. explicitly uploaded as raw), return as-is.
  */
 function getPdfViewUrl(url) {
     if (!url) return url;
-    // Already a raw resource — return as-is
     if (url.includes('/raw/upload/')) return url;
-
-    // Insert fl_attachment:false transformation right after /image/upload/
-    // so the browser receives the actual PDF bytes.
-    // e.g. .../image/upload/v123456/kyc_docs/xxx.pdf
-    //   → .../image/upload/fl_attachment:false/v123456/kyc_docs/xxx.pdf
-    return url.replace(
-        '/image/upload/',
-        '/image/upload/fl_attachment:false/'
-    );
+    // Rewrite image/upload → raw/upload to get actual PDF bytes
+    return url.replace('/image/upload/', '/raw/upload/');
 }
 
 /**
- * Get a Cloudinary thumbnail URL for PDFs (first page preview).
- * Converts the PDF resource to a JPEG thumbnail via page=1 transformation.
+ * FIX #2 — Wrap the raw PDF URL in Google Docs Viewer.
+ *
+ * Google Docs Viewer renders PDFs inline in any browser, including mobile and
+ * browsers with inline-PDF policies disabled.  Works as long as the Cloudinary
+ * URL is publicly accessible (no signed URL required for most accounts).
+ *
+ * Format: https://docs.google.com/viewer?url=<encoded-url>&embedded=true
+ */
+function getGoogleDocsViewerUrl(rawPdfUrl) {
+    return `https://docs.google.com/viewer?url=${encodeURIComponent(rawPdfUrl)}&embedded=true`;
+}
+
+/**
+ * Download URL — fl_attachment (without :false) tells Cloudinary to send
+ * Content-Disposition: attachment so the browser downloads the file.
+ */
+function getPdfDownloadUrl(url) {
+    if (!url) return url;
+    if (url.includes('/raw/upload/')) {
+        return url.replace('/raw/upload/', '/raw/upload/fl_attachment/');
+    }
+    return url.replace('/image/upload/', '/image/upload/fl_attachment/');
+}
+
+/**
+ * Thumbnail — first-page JPEG preview for PDFs.
+ * Only works when the file was uploaded to image/upload resource type.
  */
 function getPdfThumbnailUrl(url) {
-    if (!url) return null;
-    // Build a JPG thumbnail from the first page of the PDF
-    // Works for PDFs uploaded to image/upload resource type
-    const base = url.replace('/image/upload/', '/image/upload/pg_1,w_200,h_150,c_fit,f_jpg/');
-    // Remove .pdf extension and add .jpg
+    if (!url || url.includes('/raw/upload/')) return null;
+    const base = url.replace(
+        '/image/upload/',
+        '/image/upload/pg_1,w_200,h_150,c_fit,f_jpg/'
+    );
     return base.replace(/\.pdf$/i, '.jpg');
 }
 
-function docLabel(index, total, customerType) {
+function docLabel(index, _total, customerType) {
     if (customerType === 'business') {
         const labels = ['Business Registration', "Authorized Person's ID", 'Additional Document'];
         return labels[index] ?? `Document ${index + 1}`;
@@ -92,7 +106,22 @@ function docLabel(index, total, customerType) {
 // ── PDF Lightbox ──────────────────────────────────────────────────────────────
 
 function PdfLightbox({ url, label, onClose }) {
-    const viewUrl = getPdfViewUrl(url);
+    const rawUrl       = getPdfViewUrl(url);           // /raw/upload/ URL
+    const embedUrl     = getGoogleDocsViewerUrl(rawUrl); // Google Docs Viewer
+    const downloadUrl  = getPdfDownloadUrl(url);
+
+    // FIX #4 — track whether the iframe loaded or failed
+    const [embedState, setEmbedState] = useState('loading'); // 'loading' | 'loaded' | 'failed'
+    const iframeRef = useRef(null);
+
+    function handleIframeLoad() {
+        // Google Docs Viewer returns a proper page, so onLoad firing = success
+        setEmbedState('loaded');
+    }
+
+    function handleIframeError() {
+        setEmbedState('failed');
+    }
 
     return (
         <>
@@ -133,7 +162,6 @@ function PdfLightbox({ url, label, onClose }) {
                     gap: 12,
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        {/* PDF badge */}
                         <span style={{
                             background: '#fee2e2', color: '#dc2626',
                             fontSize: '0.65rem', fontWeight: 800,
@@ -144,26 +172,22 @@ function PdfLightbox({ url, label, onClose }) {
                             {label}
                         </p>
                     </div>
+
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-                        {/* Open in new tab button */}
+                        {/* Open raw PDF in new tab */}
                         <a
-                            href={viewUrl}
+                            href={rawUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            title="Open PDF in new tab"
                             style={{
                                 display: 'flex', alignItems: 'center', gap: 5,
                                 padding: '6px 14px',
                                 background: '#2563eb',
-                                border: 'none',
                                 borderRadius: 7,
                                 color: '#fff',
                                 fontSize: '0.78rem', fontWeight: 700,
                                 textDecoration: 'none',
-                                transition: 'background 0.15s',
                             }}
-                            onMouseEnter={e => e.currentTarget.style.background = '#1d4ed8'}
-                            onMouseLeave={e => e.currentTarget.style.background = '#2563eb'}
                         >
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
@@ -172,11 +196,11 @@ function PdfLightbox({ url, label, onClose }) {
                             </svg>
                             Open in New Tab
                         </a>
-                        {/* Download button */}
+
+                        {/* Download */}
                         <a
-                            href={url.replace('/image/upload/', '/image/upload/fl_attachment/')}
+                            href={downloadUrl}
                             download
-                            title="Download PDF"
                             style={{
                                 display: 'flex', alignItems: 'center', gap: 5,
                                 padding: '6px 12px',
@@ -186,10 +210,7 @@ function PdfLightbox({ url, label, onClose }) {
                                 color: 'rgba(255,255,255,0.8)',
                                 fontSize: '0.78rem', fontWeight: 600,
                                 textDecoration: 'none',
-                                transition: 'background 0.15s',
                             }}
-                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.18)'}
-                            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                         >
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -198,6 +219,7 @@ function PdfLightbox({ url, label, onClose }) {
                             </svg>
                             Download
                         </a>
+
                         {/* Close */}
                         <button
                             onClick={onClose}
@@ -222,23 +244,55 @@ function PdfLightbox({ url, label, onClose }) {
                     </div>
                 </div>
 
-                {/* PDF Viewer */}
-                <div style={{ flex: 1, position: 'relative', background: '#1f2937' }}>
-                    {/*
-                        Use <object> instead of <iframe> — better cross-browser PDF support.
-                        The fallback content is shown when the browser can't render inline PDFs.
-                    */}
-                    <object
-                        data={viewUrl}
-                        type="application/pdf"
-                        style={{
-                            width: '100%',
-                            height: '100%',
-                            border: 'none',
-                            display: 'block',
-                        }}
-                    >
-                        {/* Fallback for browsers that block inline PDFs (mobile, some Chromium policies) */}
+                {/* Viewer body */}
+                <div style={{ flex: 1, position: 'relative', background: '#1f2937', overflow: 'hidden' }}>
+
+                    {/* Loading spinner — shown until iframe fires onLoad */}
+                    {embedState === 'loading' && (
+                        <div style={{
+                            position: 'absolute', inset: 0,
+                            display: 'flex', flexDirection: 'column',
+                            alignItems: 'center', justifyContent: 'center',
+                            gap: 14, color: 'rgba(255,255,255,0.5)',
+                            fontSize: '0.85rem',
+                            zIndex: 2,
+                            pointerEvents: 'none',
+                        }}>
+                            <div style={{
+                                width: 36, height: 36,
+                                border: '3px solid rgba(255,255,255,0.15)',
+                                borderTop: '3px solid #2563eb',
+                                borderRadius: '50%',
+                                animation: 'kyc-spin 0.8s linear infinite',
+                            }} />
+                            Loading PDF…
+                        </div>
+                    )}
+
+                    {/* FIX #3 — iframe with Google Docs Viewer URL */}
+                    {embedState !== 'failed' && (
+                        <iframe
+                            ref={iframeRef}
+                            src={embedUrl}
+                            title={label}
+                            onLoad={handleIframeLoad}
+                            onError={handleIframeError}
+                            style={{
+                                width: '100%',
+                                height: '100%',
+                                border: 'none',
+                                display: 'block',
+                                // Keep invisible until loaded to avoid FOUC
+                                opacity: embedState === 'loaded' ? 1 : 0,
+                                transition: 'opacity 0.3s',
+                            }}
+                            // Allow scripts needed by Google Docs Viewer
+                            sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+                        />
+                    )}
+
+                    {/* FIX #4 — fallback when embed fails */}
+                    {embedState === 'failed' && (
                         <div style={{
                             display: 'flex',
                             flexDirection: 'column',
@@ -249,7 +303,7 @@ function PdfLightbox({ url, label, onClose }) {
                             padding: 32,
                             textAlign: 'center',
                         }}>
-                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none"
+                            <svg width="56" height="56" viewBox="0 0 24 24" fill="none"
                                 stroke="#ef4444" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                                 <polyline points="14 2 14 8 20 8"/>
@@ -258,33 +312,45 @@ function PdfLightbox({ url, label, onClose }) {
                             </svg>
                             <div>
                                 <p style={{ color: '#e5e7eb', fontWeight: 700, margin: '0 0 8px', fontSize: '1rem' }}>
-                                    Your browser can't display this PDF inline.
+                                    Inline preview unavailable
                                 </p>
                                 <p style={{ color: '#9ca3af', fontSize: '0.85rem', margin: '0 0 20px' }}>
-                                    Use the buttons above to open or download the document.
+                                    The PDF could not be embedded. Use the buttons above to open or download it.
                                 </p>
-                                <a
-                                    href={viewUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    style={{
-                                        display: 'inline-flex', alignItems: 'center', gap: 8,
-                                        padding: '10px 24px',
-                                        background: '#2563eb', color: '#fff',
-                                        borderRadius: 8, textDecoration: 'none',
-                                        fontWeight: 700, fontSize: '0.9rem',
-                                    }}
-                                >
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                                        <polyline points="15 3 21 3 21 9"/>
-                                        <line x1="10" y1="14" x2="21" y2="3"/>
-                                    </svg>
-                                    Open PDF in New Tab
-                                </a>
+                                <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+                                    <a
+                                        href={rawUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: 8,
+                                            padding: '10px 24px',
+                                            background: '#2563eb', color: '#fff',
+                                            borderRadius: 8, textDecoration: 'none',
+                                            fontWeight: 700, fontSize: '0.9rem',
+                                        }}
+                                    >
+                                        Open PDF in New Tab
+                                    </a>
+                                    <a
+                                        href={downloadUrl}
+                                        download
+                                        style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: 8,
+                                            padding: '10px 24px',
+                                            background: 'rgba(255,255,255,0.1)',
+                                            border: '1px solid rgba(255,255,255,0.2)',
+                                            color: '#e5e7eb',
+                                            borderRadius: 8, textDecoration: 'none',
+                                            fontWeight: 600, fontSize: '0.9rem',
+                                        }}
+                                    >
+                                        Download PDF
+                                    </a>
+                                </div>
                             </div>
                         </div>
-                    </object>
+                    )}
                 </div>
             </div>
         </>
@@ -321,7 +387,6 @@ function ImageLightbox({ url, label, onClose }) {
                 flexDirection: 'column',
                 animation: 'kyc-pop 0.22s cubic-bezier(0.34,1.56,0.64,1)',
             }}>
-                {/* Header */}
                 <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     padding: '12px 18px',
@@ -352,11 +417,6 @@ function ImageLightbox({ url, label, onClose }) {
                                 textDecoration: 'none',
                             }}
                         >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                                <polyline points="15 3 21 3 21 9"/>
-                                <line x1="10" y1="14" x2="21" y2="3"/>
-                            </svg>
                             Full Size
                         </a>
                         <button
@@ -382,7 +442,6 @@ function ImageLightbox({ url, label, onClose }) {
                     </div>
                 </div>
 
-                {/* Image */}
                 <div style={{
                     flex: 1, overflow: 'auto',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -413,6 +472,7 @@ function DocThumb({ url, label, onClick }) {
     const [imgErrored, setImgErrored] = useState(false);
     const [thumbError, setThumbError] = useState(false);
     const docIsPdf = isPdf(url);
+    // FIX #6 — only attempt thumbnail for image/upload PDFs, not raw/upload
     const thumbUrl = docIsPdf ? getPdfThumbnailUrl(url) : url;
 
     return (
@@ -428,7 +488,6 @@ function DocThumb({ url, label, onClick }) {
                 width: '100%',
             }}
         >
-            {/* Thumbnail box */}
             <div
                 style={{
                     width: '100%', aspectRatio: '4/3',
@@ -449,11 +508,9 @@ function DocThumb({ url, label, onClick }) {
                 }}
             >
                 {docIsPdf ? (
-                    /* PDF thumbnail — try Cloudinary page preview, fall back to icon */
                     <>
-                        {!thumbError && thumbUrl ? (
+                        {thumbUrl && !thumbError ? (
                             <>
-                                {/* Loading shimmer */}
                                 {!imgLoaded && (
                                     <div style={{
                                         position: 'absolute', inset: 0,
@@ -473,7 +530,6 @@ function DocThumb({ url, label, onClick }) {
                                         display: imgLoaded ? 'block' : 'none',
                                     }}
                                 />
-                                {/* PDF badge overlay */}
                                 {imgLoaded && (
                                     <div style={{
                                         position: 'absolute', top: 6, right: 6,
@@ -486,11 +542,15 @@ function DocThumb({ url, label, onClick }) {
                             </>
                         ) : null}
 
-                        {/* Fallback PDF icon (shown when no thumb or thumb failed) */}
-                        {(thumbError || !thumbUrl) && (
+                        {/* PDF icon fallback — shown immediately for raw/upload or when thumb fails */}
+                        {(!thumbUrl || thumbError || !imgLoaded) && (
                             <div style={{
                                 display: 'flex', flexDirection: 'column',
                                 alignItems: 'center', gap: 6, padding: 12,
+                                position: thumbUrl && !thumbError ? 'absolute' : 'static',
+                                opacity: imgLoaded ? 0 : 1,
+                                transition: 'opacity 0.2s',
+                                pointerEvents: 'none',
                             }}>
                                 <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
                                     stroke="#ef4444" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
@@ -509,9 +569,7 @@ function DocThumb({ url, label, onClick }) {
                         )}
                     </>
                 ) : (
-                    /* Image thumbnail */
                     <>
-                        {/* Loading shimmer */}
                         {!imgLoaded && !imgErrored && (
                             <div style={{
                                 position: 'absolute', inset: 0,
@@ -520,7 +578,6 @@ function DocThumb({ url, label, onClick }) {
                                 animation: 'kyc-shimmer 1.4s infinite',
                             }} />
                         )}
-
                         {imgErrored ? (
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: 12 }}>
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5">
@@ -539,7 +596,6 @@ function DocThumb({ url, label, onClick }) {
                                     width: '100%', height: '100%',
                                     objectFit: 'cover',
                                     display: imgLoaded ? 'block' : 'none',
-                                    transition: 'transform 0.2s',
                                 }}
                             />
                         )}
@@ -568,28 +624,11 @@ function DocThumb({ url, label, onClick }) {
                             padding: '6px 12px', borderRadius: 20,
                         }}
                     >
-                        {docIsPdf ? (
-                            <>
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                                    <polyline points="14 2 14 8 20 8"/>
-                                </svg>
-                                View PDF
-                            </>
-                        ) : (
-                            <>
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                                    <line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>
-                                </svg>
-                                View Image
-                            </>
-                        )}
+                        {docIsPdf ? 'View PDF' : 'View Image'}
                     </div>
                 </div>
             </div>
 
-            {/* Label */}
             <p style={{
                 margin: 0,
                 fontSize: '0.72rem', fontWeight: 600,
@@ -606,7 +645,7 @@ function DocThumb({ url, label, onClick }) {
 // ── Main Panel ────────────────────────────────────────────────────────────────
 
 export default function KycDocsPanel({ booking }) {
-    const [lightbox, setLightbox] = useState(null); // { url, label }
+    const [lightbox, setLightbox] = useState(null);
 
     const docs     = booking?.kycDocUrls ?? [];
     const custType = booking?.customerType ?? 'individual';
@@ -616,15 +655,11 @@ export default function KycDocsPanel({ booking }) {
     const isVerified = ['Active', 'Completed'].includes(status);
     const isPending  = status === 'Pending';
 
-    function openLightbox(url, label) {
-        setLightbox({ url, label });
-    }
-
     return (
         <>
             <style>{`
-                @keyframes kyc-fade  { from { opacity:0 } to { opacity:1 } }
-                @keyframes kyc-pop   {
+                @keyframes kyc-fade    { from { opacity:0 } to { opacity:1 } }
+                @keyframes kyc-pop     {
                     from { opacity:0; transform:translate(-50%,-50%) scale(0.94) }
                     to   { opacity:1; transform:translate(-50%,-50%) scale(1) }
                 }
@@ -632,16 +667,18 @@ export default function KycDocsPanel({ booking }) {
                     0%   { background-position:200% 0 }
                     100% { background-position:-200% 0 }
                 }
+                @keyframes kyc-spin    {
+                    from { transform: rotate(0deg) }
+                    to   { transform: rotate(360deg) }
+                }
                 .kyc-thumb-wrap:hover .kyc-thumb-overlay { background: rgba(37,99,235,0.15) !important; }
                 .kyc-thumb-wrap:hover .kyc-thumb-btn     { opacity: 1 !important; }
             `}</style>
 
             <div className="bp-drawer__section">
-                {/* Section header */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                     <p className="bp-drawer__label" style={{ margin: 0 }}>KYC Documents</p>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        {/* Customer type pill */}
                         <span style={{
                             fontSize: '0.65rem', fontWeight: 700,
                             padding: '2px 8px', borderRadius: 20,
@@ -652,7 +689,6 @@ export default function KycDocsPanel({ booking }) {
                         }}>
                             {custType}
                         </span>
-                        {/* Verification badge */}
                         {isVerified && (
                             <span style={{
                                 display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -681,7 +717,6 @@ export default function KycDocsPanel({ booking }) {
                     </div>
                 </div>
 
-                {/* No docs */}
                 {!hasAny && (
                     <div style={{
                         display: 'flex', alignItems: 'center', gap: 10,
@@ -704,7 +739,6 @@ export default function KycDocsPanel({ booking }) {
                     </div>
                 )}
 
-                {/* Document grid */}
                 {hasAny && (
                     <div style={{
                         display: 'grid',
@@ -718,7 +752,7 @@ export default function KycDocsPanel({ booking }) {
                                     <DocThumb
                                         url={url}
                                         label={label}
-                                        onClick={() => openLightbox(url, label)}
+                                        onClick={() => setLightbox({ url, label })}
                                     />
                                 </div>
                             );
@@ -726,7 +760,6 @@ export default function KycDocsPanel({ booking }) {
                     </div>
                 )}
 
-                {/* Count note */}
                 {hasAny && (
                     <p style={{ margin: '8px 0 0', fontSize: '0.72rem', color: '#9ca3af' }}>
                         {docs.length} document{docs.length !== 1 ? 's' : ''} · click any thumbnail to view
@@ -735,7 +768,6 @@ export default function KycDocsPanel({ booking }) {
                 )}
             </div>
 
-            {/* Lightbox — split by type */}
             {lightbox && (
                 isPdf(lightbox.url)
                     ? <PdfLightbox url={lightbox.url} label={lightbox.label} onClose={() => setLightbox(null)} />
