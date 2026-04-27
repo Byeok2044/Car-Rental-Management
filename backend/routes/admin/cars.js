@@ -1,13 +1,3 @@
-/**
- * backend/routes/admin/cars.js  (UPDATED)
- *
- * Changes from original:
- *   1. DELETE route now calls deleteImage() to remove the old Cloudinary asset
- *   2. PUT (edit) route calls deleteImage() on the OLD image when a new one is supplied
- *   3. POST (create) validates that the image URL is a Cloudinary URL (basic guard)
- *
- * Everything else is unchanged.
- */
 
 import { Router } from 'express';
 import Car from '../../models/cars.js';

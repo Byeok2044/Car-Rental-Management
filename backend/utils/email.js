@@ -171,13 +171,6 @@ export async function sendEmail(to, subject, html, attachments = []) {
     }
 }
 
-// ── ADD THESE TWO FUNCTIONS to backend/utils/email.js ──────────────────────
-// Place them after buildSubmittedEmail and before buildQuoteEmail
-
-/**
- * Email sent when admin verifies the customer's KYC documents.
- * Booking moves from Unverified → Pending.
- */
 export function buildDocsVerifiedEmail(booking, carTitle) {
     const refNo = `#${String(booking._id).slice(-8).toUpperCase()}`;
     return {
@@ -198,10 +191,6 @@ export function buildDocsVerifiedEmail(booking, carTitle) {
     };
 }
 
-/**
- * Email sent when admin rejects the customer's KYC documents.
- * Booking is cancelled and customer is informed.
- */
 export function buildDocsRejectedEmail(booking, carTitle, reason) {
     const refNo = `#${String(booking._id).slice(-8).toUpperCase()}`;
     return {

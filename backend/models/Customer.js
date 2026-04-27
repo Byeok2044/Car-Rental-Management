@@ -6,7 +6,6 @@ const customerSchema = new mongoose.Schema({
     phone: { type: String, trim: true },
 }, { timestamps: true });
 
-// Check if the model exists before recreating it
 const Customer = mongoose.models.Customer || mongoose.model('Customer', customerSchema);
 
 export default Customer;
