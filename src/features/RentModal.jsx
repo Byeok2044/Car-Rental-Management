@@ -5,26 +5,26 @@ import './RentModal.css';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
-// Allowed file types for KYC documents
-const DOC_ALLOWED_MIME  = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
-const DOC_ALLOWED_EXT   = ['.jpg', '.jpeg', '.png', '.webp', '.pdf'];
-const DOC_MAX_BYTES     = 10 * 1024 * 1024; // 10 MB
+// ── Images only — PDF removed (Cloudinary free-tier PDF handling is limited)
+const DOC_ALLOWED_MIME = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+const DOC_ALLOWED_EXT  = ['.jpg', '.jpeg', '.png', '.webp'];
+const DOC_MAX_BYTES    = 5 * 1024 * 1024; // 5 MB — sufficient for photos/scans
 
-// ── Cloudinary doc upload helper ──────────────────────────────────────────────
+// ── Cloudinary image upload helper ───────────────────────────────────────────
 
 async function uploadDocToCloudinary(file) {
     if (!file) throw new Error('No file provided.');
 
     // 1. Client-side validation
     if (!DOC_ALLOWED_MIME.includes(file.type)) {
-        throw new Error(`"${file.name}" is not a supported type. Use JPG, PNG, WebP, or PDF.`);
+        throw new Error(`"${file.name}" is not a supported type. Please upload a JPG, PNG, or WebP image.`);
     }
     if (file.size > DOC_MAX_BYTES) {
         const mb = (file.size / (1024 * 1024)).toFixed(1);
-        throw new Error(`"${file.name}" (${mb} MB) exceeds the 10 MB limit.`);
+        throw new Error(`"${file.name}" (${mb} MB) exceeds the 5 MB limit.`);
     }
 
-    // 2. Get signed token from backend (no auth required for KYC docs)
+    // 2. Get signed token from backend
     const signRes = await fetch(`${API_BASE_URL}/api/upload/sign-doc`);
     if (!signRes.ok) {
         const err = await signRes.json().catch(() => ({}));
@@ -342,15 +342,14 @@ function LocationPicker({ value, onChange, disabled }) {
     );
 }
 
-// ── Document Upload Component (with Cloudinary upload support) ─────────────────
-function DocUpload({ label, hint, accept = 'image/*,.pdf', value, onChange, required = false, uploadedUrl, onUploaded, disabled: externalDisabled = false }) {
+// ── Document Upload Component (images only — PDF removed) ─────────────────────
+function DocUpload({ label, hint, accept = 'image/*', value, onChange, required = false, uploadedUrl, onUploaded, disabled: externalDisabled = false }) {
     const fileRef        = useRef(null);
     const [preview,     setPreview]     = useState(null);
     const [dragging,    setDragging]    = useState(false);
     const [uploading,   setUploading]   = useState(false);
     const [uploadError, setUploadError] = useState('');
 
-    // Show a "already uploaded" state if a URL exists (e.g. from a previous attempt)
     const isUploaded = !!uploadedUrl;
     const disabled   = externalDisabled || uploading;
 
@@ -358,17 +357,13 @@ function DocUpload({ label, hint, accept = 'image/*,.pdf', value, onChange, requ
         if (!file) return;
         setUploadError('');
 
-        // Show local preview immediately
+        // Show local image preview immediately
         onChange(file);
-        if (file.type.startsWith('image/')) {
-            const reader = new FileReader();
-            reader.onload = e => setPreview(e.target.result);
-            reader.readAsDataURL(file);
-        } else {
-            setPreview('pdf');
-        }
+        const reader = new FileReader();
+        reader.onload = e => setPreview(e.target.result);
+        reader.readAsDataURL(file);
 
-        // Upload to Cloudinary straight away
+        // Upload to Cloudinary
         setUploading(true);
         try {
             const url = await uploadDocToCloudinary(file);
@@ -439,30 +434,14 @@ function DocUpload({ label, hint, accept = 'image/*,.pdf', value, onChange, requ
                             <polyline points="21 15 16 10 5 21"/>
                         </svg>
                         <span style={{ fontSize: '0.78rem', color: '#9ca3af', fontWeight: 500, textAlign: 'center' }}>
-                            {hint || 'Click or drag file here'}
+                            {hint || 'Click or drag image here'}
                         </span>
-                        <span style={{ fontSize: '0.7rem', color: '#c4c9d4' }}>JPG, PNG, WebP, or PDF · Max 10 MB</span>
+                        <span style={{ fontSize: '0.7rem', color: '#c4c9d4' }}>JPG, PNG, or WebP · Max 5 MB</span>
                     </div>
                 )}
 
-                {/* PDF preview */}
-                {value && preview === 'pdf' && (
-                    <>
-                        <div style={{ width: 38, height: 38, background: '#fee2e2', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                                <polyline points="14 2 14 8 20 8"/>
-                            </svg>
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: isUploaded ? '#166534' : '#92400e', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value.name}</p>
-                            <p style={{ margin: '2px 0 0', fontSize: '0.72rem', color: '#9ca3af' }}>{(value.size / 1024).toFixed(0)} KB · PDF</p>
-                        </div>
-                    </>
-                )}
-
-                {/* Image preview */}
-                {value && preview && preview !== 'pdf' && (
+                {/* Image preview — PDF branch removed */}
+                {value && preview && (
                     <>
                         <img src={preview} alt="preview" style={{ width: 52, height: 38, objectFit: 'cover', borderRadius: 6, border: `1px solid ${isUploaded ? '#d1fae5' : '#fde68a'}`, flexShrink: 0 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -511,6 +490,7 @@ function DocUpload({ label, hint, accept = 'image/*,.pdf', value, onChange, requ
                     </div>
                 )}
 
+                {/* Images only — accept filtered to image extensions */}
                 <input ref={fileRef} type="file" accept={DOC_ALLOWED_EXT.join(',')} style={{ display: 'none' }}
                     onChange={e => handleFile(e.target.files[0])} disabled={disabled} />
             </div>
@@ -525,7 +505,7 @@ function DocUpload({ label, hint, accept = 'image/*,.pdf', value, onChange, requ
                 </div>
             )}
 
-            {/* Uploaded success URL hint */}
+            {/* Uploaded success hint */}
             {isUploaded && !uploadError && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -706,21 +686,21 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
         email:    '',
     });
 
-    // Individual docs — file objects for preview, URLs for actual storage
-    const [idFile,       setIdFile]       = useState(null);
-    const [idUrl,        setIdUrl]        = useState('');   // Cloudinary URL
-    const [selfieFile,   setSelfieFile]   = useState(null);
-    const [selfieUrl,    setSelfieUrl]    = useState('');   // Cloudinary URL
+    // Individual docs
+    const [idFile,     setIdFile]     = useState(null);
+    const [idUrl,      setIdUrl]      = useState('');
+    const [selfieFile, setSelfieFile] = useState(null);
+    const [selfieUrl,  setSelfieUrl]  = useState('');
 
     // Business docs
-    const [busName,      setBusName]      = useState('');
-    const [authPerson,   setAuthPerson]   = useState('');
-    const [authPhone,    setAuthPhone]    = useState('');
-    const [authEmail,    setAuthEmail]    = useState('');
-    const [bizRegFile,   setBizRegFile]   = useState(null);
-    const [bizRegUrl,    setBizRegUrl]    = useState('');   // Cloudinary URL
-    const [authIdFile,   setAuthIdFile]   = useState(null);
-    const [authIdUrl,    setAuthIdUrl]    = useState('');   // Cloudinary URL
+    const [busName,    setBusName]    = useState('');
+    const [authPerson, setAuthPerson] = useState('');
+    const [authPhone,  setAuthPhone]  = useState('');
+    const [authEmail,  setAuthEmail]  = useState('');
+    const [bizRegFile, setBizRegFile] = useState(null);
+    const [bizRegUrl,  setBizRegUrl]  = useState('');
+    const [authIdFile, setAuthIdFile] = useState(null);
+    const [authIdUrl,  setAuthIdUrl]  = useState('');
 
     const [cart, setCart] = useState([{
         car,
@@ -738,15 +718,12 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
     const [errorMap,       setErrorMap]       = useState({});
     const [docError,       setDocError]       = useState('');
 
-    // True while any DocUpload is still in the middle of uploading
-    const anyDocUploading = false; // DocUpload manages its own spinner; we block submit via URL check instead
-
     const updateItem = useCallback((index, patch) => {
         setCart(prev => prev.map((item, i) => i === index ? { ...item, ...patch } : item));
     }, []);
 
-    const removeItem  = useCallback((index) => { setCart(prev => prev.filter((_, i) => i !== index)); }, []);
-    const addVehicle  = useCallback((newCar) => {
+    const removeItem = useCallback((index) => { setCart(prev => prev.filter((_, i) => i !== index)); }, []);
+    const addVehicle = useCallback((newCar) => {
         setCart(prev => [...prev, { car: newCar, qty: 1, pickupDate: '', rentalDays: 1, pickupLocation: '' }]);
     }, []);
 
@@ -785,27 +762,27 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
         });
         if (Object.keys(newErrors).length > 0) { setErrorMap(newErrors); return; }
 
-        // Document validation — must be uploaded (URL present), not just selected
+        // Document validation — URL must be present (upload complete)
         if (customerType === 'individual') {
             if (!idFile) {
-                setDocError("Please upload your Driver's License or valid government ID.");
+                setDocError("Please upload a photo of your Driver's License or valid government ID.");
                 return;
             }
             if (idFile && !idUrl) {
-                setDocError("Your ID is still uploading — please wait a moment before confirming.");
+                setDocError("Your ID photo is still uploading — please wait a moment before confirming.");
                 return;
             }
         } else {
             if (!bizRegFile || !bizRegUrl) {
                 setDocError(!bizRegFile
-                    ? 'Please upload your Business Registration document.'
-                    : 'Your business registration is still uploading — please wait.');
+                    ? 'Please upload a photo of your Business Registration document.'
+                    : 'Your business registration photo is still uploading — please wait.');
                 return;
             }
             if (!authIdFile || !authIdUrl) {
                 setDocError(!authIdFile
-                    ? "Please upload the authorized person's valid ID."
-                    : "The authorized person's ID is still uploading — please wait.");
+                    ? "Please upload a photo of the authorized person's valid ID."
+                    : "The authorized person's ID photo is still uploading — please wait.");
                 return;
             }
             if (!authPerson.trim()) {
@@ -820,7 +797,6 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
             return;
         }
 
-        // Collect uploaded doc URLs
         const kycDocUrls = customerType === 'individual'
             ? [idUrl, selfieUrl].filter(Boolean)
             : [bizRegUrl, authIdUrl].filter(Boolean);
@@ -1039,13 +1015,13 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
                                                         <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                                                     </svg>
                                                     <p style={{ margin: 0, fontSize: '0.78rem', color: '#92400e', lineHeight: 1.5 }}>
-                                                        Documents are uploaded securely. Please upload a clear photo or scan of your ID.
+                                                        Please upload a clear photo of your ID as a JPG, PNG, or WebP image (max 5 MB).
                                                     </p>
                                                 </div>
 
                                                 <DocUpload
                                                     label="Driver's License or Valid Government ID"
-                                                    hint="Upload Driver's License, Passport, SSS, PhilHealth, or any gov't ID"
+                                                    hint="Take a photo of your Driver's License, Passport, SSS, PhilHealth, or any gov't ID"
                                                     value={idFile}
                                                     onChange={setIdFile}
                                                     uploadedUrl={idUrl}
@@ -1131,13 +1107,13 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
                                                         <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                                                     </svg>
                                                     <p style={{ margin: 0, fontSize: '0.78rem', color: '#92400e', lineHeight: 1.5 }}>
-                                                        Business clients must provide registration documents and the authorized representative's valid ID. Documents upload securely to our server.
+                                                        Please upload clear photos of your business registration and the authorized representative's ID (JPG, PNG, or WebP, max 5 MB each).
                                                     </p>
                                                 </div>
 
                                                 <DocUpload
                                                     label="Business Registration Document"
-                                                    hint="DTI Certificate, SEC Registration, or Business Permit"
+                                                    hint="Photo of your DTI Certificate, SEC Registration, or Business Permit"
                                                     value={bizRegFile}
                                                     onChange={setBizRegFile}
                                                     uploadedUrl={bizRegUrl}
@@ -1148,7 +1124,7 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
 
                                                 <DocUpload
                                                     label="Authorized Person's Valid ID"
-                                                    hint="Driver's License, Passport, or any government-issued ID"
+                                                    hint="Photo of Driver's License, Passport, or any government-issued ID"
                                                     value={authIdFile}
                                                     onChange={setAuthIdFile}
                                                     uploadedUrl={authIdUrl}
