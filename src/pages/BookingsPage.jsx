@@ -5,17 +5,10 @@ import KycDocsPanel from '../features/KycDocsPanel.jsx';
 const API_BASE_URL  = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const PER_PAGE      = 10;
 
-// Status flow:
-//   Unverified → (verify-docs) → Pending → (payment) → Active → (full payment) → Completed
-//   Any stock-holding status can be Cancelled (restores stock)
-//
-// STATUS_TRANSITIONS defines which buttons appear in the drawer status banner.
-// 'Pending' is intentionally absent from manual transitions — it is only reachable
-// via the DocVerificationPanel's "Verify Documents" action.
 const STATUS_FILTERS = ['All', 'Unverified', 'Pending', 'Active', 'Completed', 'Cancelled'];
 
 const STATUS_TRANSITIONS = {
-    Unverified: [],                      // Handled exclusively by DocVerificationPanel
+    Unverified: [],
     Pending:    ['Active', 'Cancelled'],
     Active:     ['Completed', 'Cancelled'],
     Completed:  [],
@@ -65,6 +58,26 @@ const fmt       = (iso) => iso
     : '—';
 const fmtCur    = (n) => n != null ? `₱${Number(n).toLocaleString('en-PH')}` : '—';
 const fmtCurNum = (n) => Number(n ?? 0);
+
+// ── Customer Type Badge ───────────────────────────────────────────────────────
+function CustomerTypeBadge({ type }) {
+    if (!type || type === 'individual') return null;
+    return (
+        <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            background: '#ede9fe', color: '#6d28d9',
+            border: '1px solid #c4b5fd',
+            fontSize: '0.65rem', fontWeight: 700,
+            padding: '2px 7px', borderRadius: 20,
+            textTransform: 'uppercase', letterSpacing: '0.06em',
+        }}>
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8L6 7h12z"/>
+            </svg>
+            Business
+        </span>
+    );
+}
 
 // ── Status Badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
@@ -172,7 +185,6 @@ function DocVerificationPanel({ booking, onVerified, onRejected }) {
         }
     }
 
-    // Past the Unverified stage — show compact summary
     if (booking.status !== 'Unverified') {
         if (!isVerified && !isRejected) return null;
         return (
@@ -212,11 +224,9 @@ function DocVerificationPanel({ booking, onVerified, onRejected }) {
         );
     }
 
-    // Unverified booking — show full verification UI
     return (
         <div className="bp-drawer__section">
             <p className="bp-drawer__label">Document Verification</p>
-
             <div style={{
                 display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px',
                 background: '#fffbeb', border: '1.5px solid #fde68a',
@@ -238,8 +248,8 @@ function DocVerificationPanel({ booking, onVerified, onRejected }) {
                     </p>
                     <p style={{ margin: '2px 0 0', fontSize: '0.73rem', color: '#6b7280' }}>
                         {hasDocs
-                            ? `${booking.kycDocUrls.length} document${booking.kycDocUrls.length !== 1 ? 's' : ''} submitted — review below then verify or reject`
-                            : 'No documents submitted yet — customer must upload documents before verification'}
+                            ? `${booking.kycDocUrls.length} document${booking.kycDocUrls.length !== 1 ? 's' : ''} submitted`
+                            : 'No documents submitted yet'}
                     </p>
                 </div>
             </div>
@@ -249,10 +259,10 @@ function DocVerificationPanel({ booking, onVerified, onRejected }) {
                 padding: '10px 14px', marginBottom: 14, fontSize: '0.78rem', color: '#1e40af', lineHeight: 1.6,
             }}>
                 <strong>Verification workflow:</strong> Review the KYC documents below.
-                Verifying moves the booking to <strong>Pending</strong> and emails the customer a confirmation.
-                Rejecting cancels the booking, restores vehicle stock, and notifies the customer with your reason.
+                Verifying moves the booking to <strong>Pending</strong>.
+                Rejecting cancels the booking and restores vehicle stock.
                 <br/><br/>
-                <strong>⚠ Quoting and payment recording are locked until documents are verified.</strong>
+                <strong>⚠ Quoting and payment are locked until documents are verified.</strong>
             </div>
 
             {error && (
@@ -278,7 +288,6 @@ function DocVerificationPanel({ booking, onVerified, onRejected }) {
                             border: 'none', borderRadius: 8, cursor: (!hasDocs || verifying) ? 'not-allowed' : 'pointer',
                             fontSize: '0.85rem', fontWeight: 700, fontFamily: 'inherit',
                             opacity: (!hasDocs || verifying) ? 0.6 : 1,
-                            transition: 'all 0.15s',
                         }}
                         title={!hasDocs ? 'No documents to verify' : 'Verify documents and move to Pending'}
                     >
@@ -299,7 +308,6 @@ function DocVerificationPanel({ booking, onVerified, onRejected }) {
                             </>
                         )}
                     </button>
-
                     <button
                         onClick={() => setShowRejectForm(true)}
                         disabled={verifying || rejecting}
@@ -309,10 +317,7 @@ function DocVerificationPanel({ booking, onVerified, onRejected }) {
                             background: '#fef2f2', color: '#dc2626',
                             border: '1.5px solid #fecaca', borderRadius: 8,
                             cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700, fontFamily: 'inherit',
-                            transition: 'all 0.15s',
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = '#fef2f2'; }}
                     >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -321,15 +326,8 @@ function DocVerificationPanel({ booking, onVerified, onRejected }) {
                     </button>
                 </div>
             ) : (
-                <div style={{
-                    background: '#fef2f2', border: '1.5px solid #fecaca',
-                    borderRadius: 10, padding: 14,
-                }}>
-                    <p style={{ margin: '0 0 10px', fontSize: '0.82rem', fontWeight: 700, color: '#991b1b', display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-                        </svg>
+                <div style={{ background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: 10, padding: 14 }}>
+                    <p style={{ margin: '0 0 10px', fontSize: '0.82rem', fontWeight: 700, color: '#991b1b' }}>
                         Reject Documents — This will cancel the booking and restore stock
                     </p>
                     <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
@@ -340,7 +338,7 @@ function DocVerificationPanel({ booking, onVerified, onRejected }) {
                         onChange={e => setRejectReason(e.target.value)}
                         disabled={rejecting}
                         rows={3}
-                        placeholder="e.g. ID image is blurry and unreadable. Please resubmit a clear photo of your valid government-issued ID."
+                        placeholder="e.g. ID image is blurry and unreadable."
                         style={{
                             width: '100%', padding: '9px 12px', marginBottom: 10,
                             border: '1.5px solid #fecaca', borderRadius: 7,
@@ -348,41 +346,23 @@ function DocVerificationPanel({ booking, onVerified, onRejected }) {
                             outline: 'none', boxSizing: 'border-box', background: '#fff',
                         }}
                     />
-                    <p style={{ margin: '0 0 10px', fontSize: '0.73rem', color: '#7f1d1d' }}>
-                        The customer will receive an email with this reason. Vehicle stock will be restored automatically.
-                    </p>
                     <div style={{ display: 'flex', gap: 8 }}>
-                        <button
-                            onClick={handleReject}
-                            disabled={rejecting}
+                        <button onClick={handleReject} disabled={rejecting}
                             style={{
-                                padding: '8px 18px',
-                                background: rejecting ? '#fecaca' : '#dc2626',
+                                padding: '8px 18px', background: rejecting ? '#fecaca' : '#dc2626',
                                 color: '#fff', border: 'none', borderRadius: 7,
                                 cursor: rejecting ? 'not-allowed' : 'pointer',
                                 fontSize: '0.85rem', fontWeight: 700, fontFamily: 'inherit',
-                                display: 'flex', alignItems: 'center', gap: 6,
-                            }}
-                        >
-                            {rejecting ? (
-                                <>
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-                                        style={{ animation: 'ad-spin 0.8s linear infinite' }}>
-                                        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                                    </svg>
-                                    Rejecting…
-                                </>
-                            ) : 'Confirm Rejection'}
+                            }}>
+                            {rejecting ? 'Rejecting…' : 'Confirm Rejection'}
                         </button>
-                        <button
-                            onClick={() => { setShowRejectForm(false); setRejectReason(''); setError(''); }}
+                        <button onClick={() => { setShowRejectForm(false); setRejectReason(''); setError(''); }}
                             disabled={rejecting}
                             style={{
                                 padding: '8px 14px', background: 'transparent',
                                 border: '1.5px solid #fecaca', borderRadius: 7,
                                 cursor: 'pointer', fontSize: '0.85rem', color: '#991b1b', fontFamily: 'inherit',
-                            }}
-                        >
+                            }}>
                             Cancel
                         </button>
                     </div>
@@ -404,7 +384,6 @@ function PaymentPanel({ booking, onUpdated }) {
     const [saving,      setSaving]      = useState(false);
     const [error,       setError]       = useState('');
 
-    // Quote/payment only available for Pending or Active (docs verified)
     const canQuote = booking.status === 'Pending' || booking.status === 'Active';
 
     useEffect(() => {
@@ -421,12 +400,10 @@ function PaymentPanel({ booking, onUpdated }) {
         setSaving(true); setError('');
         try {
             const data = await apiFetch(`/api/admin/bookings/${booking._id}/quote`, {
-                method:  'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                method:  'PUT', headers: { 'Content-Type': 'application/json' },
                 body:    JSON.stringify({ quotedPrice: Number(quotedPrice), paymentNotes: quoteNotes }),
             });
-            onUpdated(data.booking);
-            setShowQuote(false);
+            onUpdated(data.booking); setShowQuote(false);
         } catch (err) { setError(err.message); }
         finally { setSaving(false); }
     }
@@ -438,13 +415,10 @@ function PaymentPanel({ booking, onUpdated }) {
         setSaving(true); setError('');
         try {
             const data = await apiFetch(`/api/admin/bookings/${booking._id}/payment`, {
-                method:  'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                method:  'PUT', headers: { 'Content-Type': 'application/json' },
                 body:    JSON.stringify({ amountPaid: Number(amountPaid), paymentMethod: payMethod, paymentNotes: payNotes }),
             });
-            onUpdated(data.booking);
-            setShowPayment(false);
-            setPayNotes('');
+            onUpdated(data.booking); setShowPayment(false); setPayNotes('');
         } catch (err) { setError(err.message); }
         finally { setSaving(false); }
     }
@@ -453,205 +427,84 @@ function PaymentPanel({ booking, onUpdated }) {
         ? Math.max(0, booking.quotedPrice - (booking.amountPaid || 0))
         : null;
 
+    const renderSummary = () => (
+        <div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8, alignItems: 'center' }}>
+                <PaymentPill status={booking.paymentStatus || 'Unpaid'} />
+                {booking.quotedPrice && <span style={{ fontSize: '0.85rem', color: '#111827', fontWeight: 600 }}>Quote: {fmtCur(booking.quotedPrice)}</span>}
+                {booking.amountPaid > 0 && <span style={{ fontSize: '0.82rem', color: '#16a34a', fontWeight: 600 }}>Paid: {fmtCur(booking.amountPaid)}</span>}
+                {outstanding > 0 && <span style={{ fontSize: '0.82rem', color: '#991b1b', fontWeight: 600 }}>Balance: {fmtCur(outstanding)}</span>}
+            </div>
+            {booking.paymentMethod && <p style={{ margin: 0, fontSize: '0.82rem', color: '#6b7280' }}>via <strong>{booking.paymentMethod}</strong></p>}
+            {booking.paymentNotes  && <p style={{ fontSize: '0.82rem', color: '#374151', margin: '6px 0 0', background: '#f8fafc', padding: '8px 12px', borderRadius: 6, borderLeft: '3px solid #e2e8f0' }}>{booking.paymentNotes}</p>}
+        </div>
+    );
+
     return (
         <div className="bp-drawer__section">
             <p className="bp-drawer__label">Payment</p>
 
-            {/* Locked for Unverified */}
             {booking.status === 'Unverified' && (
-                <div style={{
-                    display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px',
-                    background: '#f8fafc', border: '1px dashed #e2e8f0', borderRadius: 8,
-                    fontSize: '0.8rem', color: '#6b7280',
-                }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2">
-                        <rect x="3" y="11" width="18" height="11" rx="2"/>
-                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                    </svg>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#f8fafc', border: '1px dashed #e2e8f0', borderRadius: 8, fontSize: '0.8rem', color: '#6b7280' }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                     Quote &amp; payment are locked until documents are verified.
                 </div>
             )}
 
-            {/* Locked for terminal statuses */}
-            {(booking.status === 'Completed' || booking.status === 'Cancelled') && (
-                <div>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8, alignItems: 'center' }}>
-                        <PaymentPill status={booking.paymentStatus || 'Unpaid'} />
-                        {booking.quotedPrice && (
-                            <span style={{ fontSize: '0.85rem', color: '#111827', fontWeight: 600 }}>
-                                Quote: {fmtCur(booking.quotedPrice)}
-                            </span>
-                        )}
-                        {booking.amountPaid > 0 && (
-                            <span style={{ fontSize: '0.82rem', color: '#16a34a', fontWeight: 600 }}>
-                                Paid: {fmtCur(booking.amountPaid)}
-                            </span>
-                        )}
-                    </div>
-                    {booking.paymentMethod && (
-                        <p style={{ margin: 0, fontSize: '0.82rem', color: '#6b7280' }}>
-                            via <strong>{booking.paymentMethod}</strong>
-                        </p>
-                    )}
-                    {booking.paymentNotes && (
-                        <p style={{ fontSize: '0.82rem', color: '#374151', margin: '6px 0 0', background: '#f8fafc', padding: '8px 12px', borderRadius: 6, borderLeft: '3px solid #e2e8f0' }}>
-                            {booking.paymentNotes}
-                        </p>
-                    )}
-                </div>
-            )}
+            {(booking.status === 'Completed' || booking.status === 'Cancelled') && renderSummary()}
 
-            {/* Active payment UI for Pending / Active */}
             {canQuote && (
                 <>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
-                        <PaymentPill status={booking.paymentStatus || 'Unpaid'} />
-                        {booking.quotedPrice && (
-                            <span style={{ fontSize: '0.85rem', color: '#111827', fontWeight: 600 }}>
-                                Quote: {fmtCur(booking.quotedPrice)}
-                            </span>
-                        )}
-                        {booking.amountPaid > 0 && (
-                            <span style={{ fontSize: '0.82rem', color: '#16a34a', fontWeight: 600 }}>
-                                Paid: {fmtCur(booking.amountPaid)}
-                            </span>
-                        )}
-                        {outstanding > 0 && (
-                            <span style={{ fontSize: '0.82rem', color: '#991b1b', fontWeight: 600 }}>
-                                Balance: {fmtCur(outstanding)}
-                            </span>
-                        )}
-                    </div>
-
-                    {booking.paymentMethod && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>via</span>
-                            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#111827', background: '#f3f4f6', padding: '2px 10px', borderRadius: 20 }}>
-                                {booking.paymentMethod}
-                            </span>
-                        </div>
-                    )}
-
-                    {booking.paymentNotes && (
-                        <p style={{ fontSize: '0.82rem', color: '#374151', margin: '0 0 10px', background: '#f8fafc', padding: '8px 12px', borderRadius: 6, borderLeft: '3px solid #e2e8f0' }}>
-                            {booking.paymentNotes}
-                        </p>
-                    )}
-
-                    {error && (
-                        <p style={{ color: '#991b1b', fontSize: '0.8rem', margin: '0 0 10px', background: '#fee2e2', padding: '6px 10px', borderRadius: 6 }}>
-                            {error}
-                        </p>
-                    )}
-
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                    {renderSummary()}
+                    {error && <p style={{ color: '#991b1b', fontSize: '0.8rem', margin: '0 0 10px', background: '#fee2e2', padding: '6px 10px', borderRadius: 6 }}>{error}</p>}
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
                         <button onClick={() => { setShowQuote(v => !v); setShowPayment(false); setError(''); }}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
-                                background: showQuote ? '#f1f5f9' : '#1e40af',
-                                color: showQuote ? '#111827' : '#fff',
-                                border: showQuote ? '1.5px solid #e2e8f0' : 'none',
-                                borderRadius: 8, cursor: 'pointer', fontSize: '0.82rem',
-                                fontWeight: 700, fontFamily: 'inherit', transition: 'all 0.15s',
-                            }}>
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                            </svg>
+                            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: showQuote ? '#f1f5f9' : '#1e40af', color: showQuote ? '#111827' : '#fff', border: showQuote ? '1.5px solid #e2e8f0' : 'none', borderRadius: 8, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700, fontFamily: 'inherit' }}>
                             {booking.quotedPrice ? 'Update Quote' : 'Set Quote'}
                         </button>
-
                         {booking.quotedPrice && (
                             <button onClick={() => { setShowPayment(v => !v); setShowQuote(false); setError(''); }}
-                                style={{
-                                    display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
-                                    background: showPayment ? '#f1f5f9' : '#065f46',
-                                    color: showPayment ? '#111827' : '#fff',
-                                    border: showPayment ? '1.5px solid #e2e8f0' : 'none',
-                                    borderRadius: 8, cursor: 'pointer', fontSize: '0.82rem',
-                                    fontWeight: 700, fontFamily: 'inherit', transition: 'all 0.15s',
-                                }}>
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <polyline points="20 6 9 17 4 12"/>
-                                </svg>
+                                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: showPayment ? '#f1f5f9' : '#065f46', color: showPayment ? '#111827' : '#fff', border: showPayment ? '1.5px solid #e2e8f0' : 'none', borderRadius: 8, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700, fontFamily: 'inherit' }}>
                                 Record Payment
                             </button>
                         )}
                     </div>
 
                     {showQuote && (
-                        <div style={{ background: '#eff6ff', border: '1.5px solid #bfdbfe', borderRadius: 10, padding: 14, marginTop: 4 }}>
-                            <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                                Quoted Price (₱) *
-                            </label>
-                            <input type="number" min="1" step="1" value={quotedPrice} disabled={saving}
-                                onChange={e => { setQuotedPrice(e.target.value); setError(''); }}
-                                placeholder="e.g. 3500"
-                                style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #bfdbfe', borderRadius: 7, fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', marginBottom: 8 }}
-                            />
-                            <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                                Notes (optional)
-                            </label>
-                            <textarea value={quoteNotes} disabled={saving} rows={2}
-                                onChange={e => setQuoteNotes(e.target.value)}
-                                placeholder="e.g. Includes driver, airport pickup"
-                                style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #bfdbfe', borderRadius: 7, fontSize: '0.875rem', fontFamily: 'inherit', resize: 'vertical', outline: 'none', boxSizing: 'border-box', marginBottom: 10 }}
-                            />
-                            <p style={{ fontSize: '0.75rem', color: '#3b82f6', margin: '0 0 10px' }}>
-                                A quote email will be sent to the customer automatically.
-                            </p>
+                        <div style={{ background: '#eff6ff', border: '1.5px solid #bfdbfe', borderRadius: 10, padding: 14, marginTop: 8 }}>
+                            <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Quoted Price (₱) *</label>
+                            <input type="number" min="1" value={quotedPrice} disabled={saving} onChange={e => { setQuotedPrice(e.target.value); setError(''); }} placeholder="e.g. 3500"
+                                style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #bfdbfe', borderRadius: 7, fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', marginBottom: 8 }} />
+                            <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Notes (optional)</label>
+                            <textarea value={quoteNotes} disabled={saving} rows={2} onChange={e => setQuoteNotes(e.target.value)} placeholder="e.g. Includes driver, airport pickup"
+                                style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #bfdbfe', borderRadius: 7, fontSize: '0.875rem', fontFamily: 'inherit', resize: 'vertical', outline: 'none', boxSizing: 'border-box', marginBottom: 10 }} />
+                            <p style={{ fontSize: '0.75rem', color: '#3b82f6', margin: '0 0 10px' }}>A quote email will be sent to the customer automatically.</p>
                             <div style={{ display: 'flex', gap: 8 }}>
-                                <button onClick={submitQuote} disabled={saving}
-                                    style={{ padding: '8px 18px', background: saving ? '#93c5fd' : '#2563eb', color: '#fff', border: 'none', borderRadius: 7, cursor: saving ? 'not-allowed' : 'pointer', fontSize: '0.85rem', fontWeight: 700, fontFamily: 'inherit', opacity: saving ? 0.7 : 1 }}>
+                                <button onClick={submitQuote} disabled={saving} style={{ padding: '8px 18px', background: saving ? '#93c5fd' : '#2563eb', color: '#fff', border: 'none', borderRadius: 7, cursor: saving ? 'not-allowed' : 'pointer', fontSize: '0.85rem', fontWeight: 700, fontFamily: 'inherit', opacity: saving ? 0.7 : 1 }}>
                                     {saving ? 'Saving…' : 'Save & Email Customer'}
                                 </button>
-                                <button onClick={() => { setShowQuote(false); setError(''); }}
-                                    style={{ padding: '8px 14px', background: 'transparent', border: '1.5px solid #e2e8f0', borderRadius: 7, cursor: 'pointer', fontSize: '0.85rem', color: '#6b7280', fontFamily: 'inherit' }}>
-                                    Cancel
-                                </button>
+                                <button onClick={() => { setShowQuote(false); setError(''); }} style={{ padding: '8px 14px', background: 'transparent', border: '1.5px solid #e2e8f0', borderRadius: 7, cursor: 'pointer', fontSize: '0.85rem', color: '#6b7280', fontFamily: 'inherit' }}>Cancel</button>
                             </div>
                         </div>
                     )}
 
                     {showPayment && (
-                        <div style={{ background: '#f0fdf4', border: '1.5px solid #a7f3d0', borderRadius: 10, padding: 14, marginTop: 4 }}>
-                            <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                                Amount Received (₱) — Quote: {fmtCur(booking.quotedPrice)}
-                            </label>
-                            <input type="number" min="0" step="1" value={amountPaid} disabled={saving}
-                                onChange={e => { setAmountPaid(e.target.value); setError(''); }}
-                                placeholder={`e.g. ${booking.quotedPrice}`}
-                                style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #a7f3d0', borderRadius: 7, fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', marginBottom: 8 }}
-                            />
-                            <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                                Payment Method
-                            </label>
+                        <div style={{ background: '#f0fdf4', border: '1.5px solid #a7f3d0', borderRadius: 10, padding: 14, marginTop: 8 }}>
+                            <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Amount Received (₱)</label>
+                            <input type="number" min="0" value={amountPaid} disabled={saving} onChange={e => { setAmountPaid(e.target.value); setError(''); }} placeholder={`e.g. ${booking.quotedPrice}`}
+                                style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #a7f3d0', borderRadius: 7, fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', marginBottom: 8 }} />
+                            <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Payment Method</label>
                             <select value={payMethod} onChange={e => setPayMethod(e.target.value)} disabled={saving}
                                 style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #a7f3d0', borderRadius: 7, fontSize: '0.875rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', marginBottom: 8, background: 'white' }}>
                                 {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
                             </select>
-                            <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                                Notes (optional)
-                            </label>
-                            <textarea value={payNotes} onChange={e => setPayNotes(e.target.value)} disabled={saving} rows={2}
-                                placeholder="e.g. Paid via GCash ref #12345678"
-                                style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #a7f3d0', borderRadius: 7, fontSize: '0.875rem', fontFamily: 'inherit', resize: 'vertical', outline: 'none', boxSizing: 'border-box', marginBottom: 10 }}
-                            />
-                            {amountPaid !== '' && !isNaN(amountPaid) && booking.quotedPrice && (
-                                <div style={{ background: '#ecfdf5', padding: '8px 12px', borderRadius: 6, marginBottom: 10, fontSize: '0.82rem', color: '#065f46', fontWeight: 600 }}>
-                                    Status will be set to: {Number(amountPaid) >= booking.quotedPrice ? 'Paid ✓' : Number(amountPaid) > 0 ? 'Partially Paid' : 'Unpaid'}
-                                    {Number(amountPaid) > 0 && Number(amountPaid) < booking.quotedPrice &&
-                                        ` (Balance: ${fmtCur(booking.quotedPrice - Number(amountPaid))})`}
-                                </div>
-                            )}
+                            <textarea value={payNotes} onChange={e => setPayNotes(e.target.value)} disabled={saving} rows={2} placeholder="e.g. Paid via GCash ref #12345678"
+                                style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #a7f3d0', borderRadius: 7, fontSize: '0.875rem', fontFamily: 'inherit', resize: 'vertical', outline: 'none', boxSizing: 'border-box', marginBottom: 10, background: 'white' }} />
                             <div style={{ display: 'flex', gap: 8 }}>
-                                <button onClick={submitPayment} disabled={saving}
-                                    style={{ padding: '8px 18px', background: saving ? '#86efac' : '#065f46', color: '#fff', border: 'none', borderRadius: 7, cursor: saving ? 'not-allowed' : 'pointer', fontSize: '0.85rem', fontWeight: 700, fontFamily: 'inherit', opacity: saving ? 0.7 : 1 }}>
+                                <button onClick={submitPayment} disabled={saving} style={{ padding: '8px 18px', background: '#065f46', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700, fontFamily: 'inherit', opacity: saving ? 0.7 : 1 }}>
                                     {saving ? 'Saving…' : 'Confirm Payment'}
                                 </button>
-                                <button onClick={() => { setShowPayment(false); setError(''); }}
-                                    style={{ padding: '8px 14px', background: 'transparent', border: '1.5px solid #e2e8f0', borderRadius: 7, cursor: 'pointer', fontSize: '0.85rem', color: '#6b7280', fontFamily: 'inherit' }}>
-                                    Cancel
-                                </button>
+                                <button onClick={() => { setShowPayment(false); setError(''); }} style={{ padding: '8px 14px', background: 'transparent', border: '1.5px solid #e2e8f0', borderRadius: 7, cursor: 'pointer', fontSize: '0.85rem', color: '#6b7280', fontFamily: 'inherit' }}>Cancel</button>
                             </div>
                         </div>
                     )}
@@ -692,9 +545,7 @@ function AdjustBookingPanel({ booking, onAdjusted }) {
         return diff > 0 ? diff : null;
     }
 
-    useEffect(() => {
-        setOpen(false); setStartDate(''); setEndDate(''); setReason(''); setError(''); setSuccess('');
-    }, [booking._id]);
+    useEffect(() => { setOpen(false); setStartDate(''); setEndDate(''); setReason(''); setError(''); setSuccess(''); }, [booking._id]);
 
     function handleOpen() {
         setStartDate(toInputDate(booking.startDate));
@@ -711,7 +562,6 @@ function AdjustBookingPanel({ booking, onAdjusted }) {
         const e = new Date(endDate);
         s.setHours(0,0,0,0); e.setHours(0,0,0,0);
         if (e <= s) { setError('End date must be after start date.'); return; }
-
         setSaving(true);
         try {
             const body = { endDate, reason: reason.trim() || undefined };
@@ -736,75 +586,38 @@ function AdjustBookingPanel({ booking, onAdjusted }) {
         <div className="bp-drawer__section">
             <p className="bp-drawer__label">{isPending ? 'Adjust Booking Dates' : 'Adjust Return Date'}</p>
             {!canAdjust ? (
-                <p style={{ fontSize: '0.8rem', color: '#9ca3af', fontStyle: 'italic', margin: 0 }}>
-                    Only Pending or Active bookings can be adjusted.
-                </p>
+                <p style={{ fontSize: '0.8rem', color: '#9ca3af', fontStyle: 'italic', margin: 0 }}>Only Pending or Active bookings can be adjusted.</p>
             ) : !open ? (
-                <button onClick={handleOpen} style={{
-                    display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
-                    background: '#f0fdf4', border: '1.5px solid #bbf7d0', color: '#065f46',
-                    borderRadius: 8, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700, fontFamily: 'inherit',
-                }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
-                        <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-                        <line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/>
-                    </svg>
+                <button onClick={handleOpen} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: '#f0fdf4', border: '1.5px solid #bbf7d0', color: '#065f46', borderRadius: 8, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700, fontFamily: 'inherit' }}>
                     {isPending ? 'Adjust Start & Return Dates' : 'Adjust Return Date'}
                 </button>
             ) : (
                 <div style={{ background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 10, padding: 14 }}>
-                    <div style={{ background: '#dcfce7', borderRadius: 7, padding: '8px 12px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: '0.78rem', color: '#065f46', fontWeight: 600 }}>
-                            Current: <strong>{new Date(booking.startDate).toLocaleDateString('en-PH', {month:'short',day:'numeric',year:'numeric'})}</strong>
-                            {' → '}<strong>{new Date(booking.endDate).toLocaleDateString('en-PH', {month:'short',day:'numeric',year:'numeric'})}</strong>
-                            {' · '}{booking.rentalDays} day{booking.rentalDays !== 1 ? 's' : ''}
-                        </span>
-                    </div>
                     {isPending && (
                         <>
                             <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>New Start Date *</label>
-                            <input type="date" value={startDate} disabled={saving}
-                                onChange={e => { setStartDate(e.target.value); setError(''); }}
-                                style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #bbf7d0', borderRadius: 7, fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', marginBottom: 10, background: 'white' }}
-                            />
+                            <input type="date" value={startDate} disabled={saving} onChange={e => { setStartDate(e.target.value); setError(''); }}
+                                style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #bbf7d0', borderRadius: 7, fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', marginBottom: 10, background: 'white' }} />
                         </>
                     )}
-                    <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                        {isActive ? 'New Return Date *' : 'New End Date *'}
-                    </label>
-                    <input type="date" value={endDate} disabled={saving}
-                        min={isPending && startDate ? startDate : toInputDate(booking.startDate)}
-                        onChange={e => { setEndDate(e.target.value); setError(''); }}
-                        style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #bbf7d0', borderRadius: 7, fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', marginBottom: 10, background: 'white' }}
-                    />
+                    <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>New Return Date *</label>
+                    <input type="date" value={endDate} disabled={saving} min={isPending && startDate ? startDate : toInputDate(booking.startDate)} onChange={e => { setEndDate(e.target.value); setError(''); }}
+                        style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #bbf7d0', borderRadius: 7, fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', marginBottom: 10, background: 'white' }} />
                     {previewDays != null && previewDays > 0 && (
                         <div style={{ background: '#ecfdf5', padding: '8px 12px', borderRadius: 6, marginBottom: 10, fontSize: '0.82rem', color: '#065f46', fontWeight: 600 }}>
-                            New period: {fmtDisplay(isPending ? startDate : booking.startDate)} → {fmtDisplay(endDate)} · {previewDays} day{previewDays !== 1 ? 's' : ''}
-                            {dayDiff !== 0 && dayDiff != null && (
-                                <span style={{ marginLeft: 8, color: dayDiff > 0 ? '#065f46' : '#b45309' }}>
-                                    ({dayDiff > 0 ? `+${dayDiff}` : dayDiff} day{Math.abs(dayDiff) !== 1 ? 's' : ''})
-                                </span>
-                            )}
+                            New period: {previewDays} day{previewDays !== 1 ? 's' : ''}
+                            {dayDiff !== 0 && dayDiff != null && <span style={{ marginLeft: 8, color: dayDiff > 0 ? '#065f46' : '#b45309' }}>({dayDiff > 0 ? `+${dayDiff}` : dayDiff}d)</span>}
                         </div>
                     )}
-                    <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Reason (optional)</label>
-                    <textarea value={reason} disabled={saving} rows={2}
-                        onChange={e => setReason(e.target.value)}
-                        placeholder="e.g. Customer requested schedule change"
-                        style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #bbf7d0', borderRadius: 7, fontSize: '0.875rem', fontFamily: 'inherit', resize: 'vertical', outline: 'none', boxSizing: 'border-box', marginBottom: 10, background: 'white' }}
-                    />
+                    <textarea value={reason} disabled={saving} rows={2} onChange={e => setReason(e.target.value)} placeholder="e.g. Customer requested schedule change"
+                        style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #bbf7d0', borderRadius: 7, fontSize: '0.875rem', fontFamily: 'inherit', resize: 'vertical', outline: 'none', boxSizing: 'border-box', marginBottom: 10, background: 'white' }} />
                     {error   && <p style={{ color: '#991b1b', fontSize: '0.8rem', margin: '0 0 10px', background: '#fee2e2', padding: '6px 10px', borderRadius: 6 }}>{error}</p>}
                     {success && <p style={{ color: '#065f46', fontSize: '0.82rem', margin: '0 0 10px', background: '#dcfce7', padding: '6px 10px', borderRadius: 6, fontWeight: 600 }}>✓ {success}</p>}
                     <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={submit} disabled={saving || !endDate || (isPending && !startDate)}
-                            style={{ padding: '8px 18px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700, fontFamily: 'inherit' }}>
+                        <button onClick={submit} disabled={saving || !endDate || (isPending && !startDate)} style={{ padding: '8px 18px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700, fontFamily: 'inherit' }}>
                             {saving ? 'Saving…' : 'Confirm Adjustment'}
                         </button>
-                        <button onClick={() => { setOpen(false); setError(''); }}
-                            style={{ padding: '8px 14px', background: 'transparent', border: '1.5px solid #bbf7d0', borderRadius: 7, cursor: 'pointer', fontSize: '0.85rem', color: '#065f46', fontFamily: 'inherit' }}>
-                            Cancel
-                        </button>
+                        <button onClick={() => { setOpen(false); setError(''); }} style={{ padding: '8px 14px', background: 'transparent', border: '1.5px solid #bbf7d0', borderRadius: 7, cursor: 'pointer', fontSize: '0.85rem', color: '#065f46', fontFamily: 'inherit' }}>Cancel</button>
                     </div>
                 </div>
             )}
@@ -834,17 +647,9 @@ function BookingDrawer({ booking: initialBooking, onClose, onStatusChange, onBoo
         catch { setDeleting(false); setConfirm(null); }
     }
 
-    function handleDocVerified(updatedBooking) {
-        setBooking(updatedBooking);
-        onBookingUpdate(updatedBooking);
-    }
+    function handleDocVerified(updatedBooking)  { setBooking(updatedBooking); onBookingUpdate(updatedBooking); }
+    function handleDocRejected(updatedBooking)  { setBooking(updatedBooking); onBookingUpdate(updatedBooking); }
 
-    function handleDocRejected(updatedBooking) {
-        setBooking(updatedBooking);
-        onBookingUpdate(updatedBooking);
-    }
-
-    // Print receipt — only for Completed bookings
     const handlePrint = async () => {
         try {
             const token    = getToken();
@@ -852,14 +657,16 @@ function BookingDrawer({ booking: initialBooking, onClose, onStatusChange, onBoo
                 headers: { 'Authorization': `Bearer ${token}` },
             });
             if (!response.ok) throw new Error('Server failed to generate the receipt.');
-            const blob         = await response.blob();
-            const url          = window.URL.createObjectURL(blob);
-            const printWindow  = window.open(url, '_blank');
+            const blob        = await response.blob();
+            const url         = window.URL.createObjectURL(blob);
+            const printWindow = window.open(url, '_blank');
             if (printWindow) setTimeout(() => window.URL.revokeObjectURL(url), 10000);
         } catch (err) {
             alert('Could not generate receipt: ' + err.message);
         }
     };
+
+    const isBusinessBooking = booking.customerType === 'business';
 
     return (
         <>
@@ -867,17 +674,19 @@ function BookingDrawer({ booking: initialBooking, onClose, onStatusChange, onBoo
                 <div className="bp-drawer" onClick={e => e.stopPropagation()}>
                     <div className="bp-drawer__header">
                         <div>
-                            <h3>Booking Details</h3>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                <h3>Booking Details</h3>
+                                {isBusinessBooking && (
+                                    <span style={{ background: '#ede9fe', color: '#6d28d9', border: '1px solid #c4b5fd', fontSize: '0.65rem', fontWeight: 800, padding: '2px 8px', borderRadius: 20, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                        Business
+                                    </span>
+                                )}
+                            </div>
                             <p className="bp-drawer__ref">#{String(booking._id).slice(-8).toUpperCase()}</p>
                         </div>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                            {/* ── Print Receipt — Completed bookings only ── */}
                             {booking.status === 'Completed' && (
-                                <button
-                                    className="bp-drawer__action-btn"
-                                    onClick={handlePrint}
-                                    title="Print official receipt (PDF)"
-                                >
+                                <button className="bp-drawer__action-btn" onClick={handlePrint} title="Print official receipt">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                         <polyline points="6 9 6 2 18 2 18 9"/>
                                         <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
@@ -886,30 +695,14 @@ function BookingDrawer({ booking: initialBooking, onClose, onStatusChange, onBoo
                                     Print Receipt
                                 </button>
                             )}
-
-                            {/* ── Delete ── */}
-                            <button
-                                onClick={() => setConfirm({ type: 'delete' })}
-                                disabled={deleting}
-                                style={{
-                                    display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px',
-                                    background: 'rgba(239,68,68,0.14)', border: '1px solid rgba(239,68,68,0.28)',
-                                    color: '#f87171', borderRadius: 6, cursor: deleting ? 'not-allowed' : 'pointer',
-                                    fontFamily: 'inherit', fontSize: '0.78rem', fontWeight: 600,
-                                    opacity: deleting ? 0.5 : 1,
-                                }}>
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <polyline points="3 6 5 6 21 6"/>
-                                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                                    <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
-                                </svg>
+                            <button onClick={() => setConfirm({ type: 'delete' })} disabled={deleting}
+                                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: 'rgba(239,68,68,0.14)', border: '1px solid rgba(239,68,68,0.28)', color: '#f87171', borderRadius: 6, cursor: deleting ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontSize: '0.78rem', fontWeight: 600, opacity: deleting ? 0.5 : 1 }}>
                                 Delete
                             </button>
                             <button className="bp-drawer__close" onClick={onClose}>×</button>
                         </div>
                     </div>
 
-                    {/* Status banner */}
                     <div className={`bp-drawer__status-banner bp-drawer__status-banner--${booking.status.toLowerCase()}`}>
                         <StatusBadge status={booking.status} />
                         <PaymentPill status={booking.paymentStatus || 'Unpaid'} />
@@ -928,36 +721,47 @@ function BookingDrawer({ booking: initialBooking, onClose, onStatusChange, onBoo
                     </div>
 
                     <div className="bp-drawer__body">
-                        {/* Doc Verification — shown first, most important for Unverified */}
-                        <DocVerificationPanel
-                            booking={booking}
-                            onVerified={handleDocVerified}
-                            onRejected={handleDocRejected}
-                        />
+                        <DocVerificationPanel booking={booking} onVerified={handleDocVerified} onRejected={handleDocRejected} />
+                        <PaymentPanel booking={booking} onUpdated={(u) => { setBooking(u); onBookingUpdate(u); }} />
+                        <AdjustBookingPanel booking={booking} onAdjusted={(u) => { setBooking(u); onBookingUpdate(u); }} />
 
-                        {/* Payment */}
-                        <PaymentPanel
-                            booking={booking}
-                            onUpdated={(updated) => { setBooking(updated); onBookingUpdate(updated); }}
-                        />
-
-                        {/* Date adjustment */}
-                        <AdjustBookingPanel
-                            booking={booking}
-                            onAdjusted={(updated) => { setBooking(updated); onBookingUpdate(updated); }}
-                        />
-
-                        {/* Customer */}
+                        {/* ── Customer / Business Info ── */}
                         <div className="bp-drawer__section">
-                            <p className="bp-drawer__label">Customer</p>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                <div className="bp-drawer__avatar">{booking.customerName?.charAt(0).toUpperCase()}</div>
-                                <div>
-                                    <p className="bp-drawer__val">{booking.customerName}</p>
-                                    {booking.customerEmail && <a href={`mailto:${booking.customerEmail}`} className="bp-drawer__link">{booking.customerEmail}</a>}
-                                    {booking.customerPhone && <a href={`tel:${booking.customerPhone}`} className="bp-drawer__link">{booking.customerPhone}</a>}
+                            <p className="bp-drawer__label">
+                                {isBusinessBooking ? 'Business Information' : 'Customer'}
+                            </p>
+
+                            {isBusinessBooking ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                    {/* Business name */}
+                                    <div style={{ background: '#f5f3ff', border: '1px solid #e9d5ff', borderRadius: 10, padding: '12px 14px' }}>
+                                        <p style={{ margin: '0 0 2px', fontSize: '0.7rem', fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Company / Business</p>
+                                        <p style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#111827' }}>{booking.businessName || '—'}</p>
+                                    </div>
+
+                                    {/* Authorized person */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                        <div className="bp-drawer__avatar" style={{ background: 'linear-gradient(135deg,#7c3aed,#4f46e5)' }}>
+                                            {(booking.authorizedPerson || booking.customerName || '?').charAt(0).toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <p style={{ margin: 0, fontSize: '0.72rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Authorized Representative</p>
+                                            <p className="bp-drawer__val">{booking.authorizedPerson || booking.customerName}</p>
+                                            {booking.customerEmail && <a href={`mailto:${booking.customerEmail}`} className="bp-drawer__link">{booking.customerEmail}</a>}
+                                            {booking.customerPhone && <a href={`tel:${booking.customerPhone}`} className="bp-drawer__link">{booking.customerPhone}</a>}
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
+                            ) : (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                    <div className="bp-drawer__avatar">{booking.customerName?.charAt(0).toUpperCase()}</div>
+                                    <div>
+                                        <p className="bp-drawer__val">{booking.customerName}</p>
+                                        {booking.customerEmail && <a href={`mailto:${booking.customerEmail}`} className="bp-drawer__link">{booking.customerEmail}</a>}
+                                        {booking.customerPhone && <a href={`tel:${booking.customerPhone}`} className="bp-drawer__link">{booking.customerPhone}</a>}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Vehicle */}
@@ -969,7 +773,6 @@ function BookingDrawer({ booking: initialBooking, onClose, onStatusChange, onBoo
                             {booking.qty > 1 && <span className="bp-drawer__qty-tag">× {booking.qty} units</span>}
                         </div>
 
-                        {/* KYC Docs */}
                         <KycDocsPanel booking={booking} />
 
                         {/* Rental Period */}
@@ -980,17 +783,13 @@ function BookingDrawer({ booking: initialBooking, onClose, onStatusChange, onBoo
                                     <span className="bp-drawer__date-lbl">Pickup</span>
                                     <span className="bp-drawer__date-val">{fmt(booking.startDate)}</span>
                                 </div>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2">
-                                    <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
-                                </svg>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                                 <div className="bp-drawer__date-box">
                                     <span className="bp-drawer__date-lbl">Return</span>
                                     <span className="bp-drawer__date-val">{fmt(booking.endDate)}</span>
                                 </div>
                             </div>
-                            <p className="bp-drawer__sub" style={{ marginTop: 8 }}>
-                                {booking.rentalDays} day{booking.rentalDays !== 1 ? 's' : ''}
-                            </p>
+                            <p className="bp-drawer__sub" style={{ marginTop: 8 }}>{booking.rentalDays} day{booking.rentalDays !== 1 ? 's' : ''}</p>
                         </div>
 
                         {booking.pickupLocation && (
@@ -1012,13 +811,10 @@ function BookingDrawer({ booking: initialBooking, onClose, onStatusChange, onBoo
                 <ConfirmDialog
                     message={`Change status to "${confirm.status}"?`}
                     subMessage={
-                        confirm.status === 'Active'
-                            ? 'Booking must have at least a partial payment recorded to become Active.'
-                            : confirm.status === 'Completed'
-                            ? 'Booking must be fully paid to complete. A receipt PDF will be emailed to the customer.'
-                            : confirm.status === 'Cancelled'
-                            ? 'This will cancel the booking and restore vehicle stock.'
-                            : undefined
+                        confirm.status === 'Active' ? 'Booking must have at least a partial payment recorded to become Active.'
+                        : confirm.status === 'Completed' ? 'Booking must be fully paid to complete. A receipt PDF will be emailed to the customer.'
+                        : confirm.status === 'Cancelled' ? 'This will cancel the booking and restore vehicle stock.'
+                        : undefined
                     }
                     confirmLabel={confirm.label}
                     confirmClass={confirm.status === 'Cancelled' ? 'bp-confirm__ok--danger' : 'bp-confirm__ok--primary'}
@@ -1030,7 +826,7 @@ function BookingDrawer({ booking: initialBooking, onClose, onStatusChange, onBoo
             {confirm?.type === 'delete' && (
                 <ConfirmDialog
                     title="Delete this booking?"
-                    message={`Booking #${String(booking._id).slice(-8).toUpperCase()} for ${booking.customerName} will be permanently removed. This cannot be undone.`}
+                    message={`Booking #${String(booking._id).slice(-8).toUpperCase()} for ${booking.customerName} will be permanently removed.`}
                     subMessage={DELETE_STOCK_CONTEXT[booking.status]}
                     confirmLabel="Delete Permanently"
                     confirmClass="bp-confirm__ok--danger"
@@ -1045,10 +841,12 @@ function BookingDrawer({ booking: initialBooking, onClose, onStatusChange, onBoo
 
 // ── CSV Export ────────────────────────────────────────────────────────────────
 function exportCSV(bookings) {
-    const headers = ['Ref','Customer','Email','Phone','Vehicle','Qty','Start','End','Days','Location','Doc Status','Quoted Price','Amount Paid','Outstanding','Payment Status','Payment Method','Booking Status','Booked On'];
+    const headers = ['Ref','Type','Customer / Authorized Person','Business Name','Email','Phone','Vehicle','Qty','Start','End','Days','Location','Doc Status','Quoted Price','Amount Paid','Outstanding','Payment Status','Payment Method','Booking Status','Booked On'];
     const rows = bookings.map(b => [
         String(b._id).slice(-8).toUpperCase(),
-        b.customerName  || '',
+        b.customerType || 'individual',
+        b.authorizedPerson || b.customerName || '',
+        b.businessName || '',
         b.customerEmail || '',
         b.customerPhone || '',
         b.carId?.title  || b.car || '',
@@ -1089,15 +887,13 @@ function Toast({ toast, onDismiss }) {
             color: isErr ? '#991b1b' : '#065f46',
             padding: '12px 18px', borderRadius: 10,
             boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-            fontSize: '0.875rem', fontWeight: 600,
-            maxWidth: 360,
+            fontSize: '0.875rem', fontWeight: 600, maxWidth: 360,
         }}>
             {isErr
                 ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                 : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>}
             {toast.msg}
-            <button onClick={onDismiss}
-                style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', opacity: 0.55, fontSize: '1rem', lineHeight: 1, padding: 0 }}>×</button>
+            <button onClick={onDismiss} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', opacity: 0.55, fontSize: '1rem', lineHeight: 1, padding: 0 }}>×</button>
         </div>
     );
 }
@@ -1176,6 +972,8 @@ export default function BookingsPage() {
             return !term ||
                 b.customerName?.toLowerCase().includes(term) ||
                 b.customerEmail?.toLowerCase().includes(term) ||
+                b.businessName?.toLowerCase().includes(term) ||
+                b.authorizedPerson?.toLowerCase().includes(term) ||
                 (b.carId?.title || b.car || '').toLowerCase().includes(term) ||
                 String(b._id).slice(-8).toLowerCase().includes(term);
         })
@@ -1205,13 +1003,8 @@ export default function BookingsPage() {
         <div className="bp-root">
             <Toast toast={toast} onDismiss={() => setToast(null)} />
 
-            {/* Unverified alert banner */}
             {unverifiedCount > 0 && (
-                <div style={{
-                    display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px',
-                    background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 10,
-                    marginBottom: 4,
-                }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 10, marginBottom: 4 }}>
                     <div style={{ width: 32, height: 32, background: '#fef9c3', border: '2px solid #fde68a', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -1222,28 +1015,21 @@ export default function BookingsPage() {
                             {unverifiedCount} booking{unverifiedCount !== 1 ? 's' : ''} awaiting document verification
                         </p>
                         <p style={{ margin: '2px 0 0', fontSize: '0.76rem', color: '#6b7280' }}>
-                            Review submitted KYC documents and verify or reject before proceeding. Quoting is locked until verified.
+                            Review submitted KYC documents and verify or reject. Quoting is locked until verified.
                         </p>
                     </div>
-                    <button
-                        onClick={() => changeFilter('Unverified')}
-                        style={{
-                            padding: '7px 16px', background: '#d97706', color: '#fff',
-                            border: 'none', borderRadius: 7, cursor: 'pointer',
-                            fontSize: '0.82rem', fontWeight: 700, fontFamily: 'inherit',
-                            whiteSpace: 'nowrap',
-                        }}>
+                    <button onClick={() => changeFilter('Unverified')}
+                        style={{ padding: '7px 16px', background: '#d97706', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                         Review Now
                     </button>
                 </div>
             )}
 
-            {/* Status filter tabs */}
+            {/* Status tabs */}
             <div className="bp-tabs">
                 {STATUS_FILTERS.map(s => (
                     <button key={s} className={`bp-tab${filter === s ? ' bp-tab--active' : ''}`} onClick={() => changeFilter(s)}>
-                        {s}
-                        <span className="bp-tab__count">{counts[s]}</span>
+                        {s}<span className="bp-tab__count">{counts[s]}</span>
                     </button>
                 ))}
             </div>
@@ -1255,7 +1041,7 @@ export default function BookingsPage() {
                         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                     </svg>
                     <input ref={searchRef} className="bp-search"
-                        placeholder="Search customer, vehicle, ref… (Ctrl+F)"
+                        placeholder="Search by name, business, vehicle, ref… (Ctrl+F)"
                         value={search} onChange={e => changeSearch(e.target.value)} />
                     {search && <button className="bp-search-clear" onClick={() => changeSearch('')}>×</button>}
                 </div>
@@ -1284,7 +1070,7 @@ export default function BookingsPage() {
                     <thead>
                         <tr>
                             <th>Ref</th>
-                            <th>Customer</th>
+                            <th>Customer / Company</th>
                             <th>Vehicle</th>
                             <th>Dates</th>
                             <th>Docs</th>
@@ -1311,63 +1097,77 @@ export default function BookingsPage() {
                                     {search && <p style={{ margin: '4px 0 0', fontSize: '0.82rem' }}>Try a different search term</p>}
                                 </td>
                             </tr>
-                        ) : paginated.map((b, i) => (
-                            <tr key={b._id} className="bp-row"
-                                style={{ animationDelay: `${i * 0.03}s` }}
-                                onClick={() => setSelected(b)}>
-                                <td><span className="bp-ref">#{String(b._id).slice(-8).toUpperCase()}</span></td>
-                                <td>
-                                    <div className="bp-customer">
-                                        <div className="bp-avatar">{b.customerName?.[0] || '?'}</div>
-                                        <div>
-                                            <p className="bp-name">{b.customerName}</p>
-                                            <p className="bp-email">{b.customerEmail || '—'}</p>
+                        ) : paginated.map((b, i) => {
+                            const isBusinessBooking = b.customerType === 'business';
+                            return (
+                                <tr key={b._id} className="bp-row" style={{ animationDelay: `${i * 0.03}s` }} onClick={() => setSelected(b)}>
+                                    <td><span className="bp-ref">#{String(b._id).slice(-8).toUpperCase()}</span></td>
+                                    <td>
+                                        <div className="bp-customer">
+                                            <div className="bp-avatar" style={{ background: isBusinessBooking ? 'linear-gradient(135deg,#7c3aed,#4f46e5)' : 'linear-gradient(135deg,#2563eb,#7c3aed)' }}>
+                                                {isBusinessBooking
+                                                    ? (b.businessName?.[0] || b.customerName?.[0] || '?').toUpperCase()
+                                                    : (b.customerName?.[0] || '?').toUpperCase()}
+                                            </div>
+                                            <div>
+                                                {isBusinessBooking ? (
+                                                    <>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                                            <p className="bp-name">{b.businessName || '—'}</p>
+                                                            <CustomerTypeBadge type={b.customerType} />
+                                                        </div>
+                                                        <p className="bp-email">{b.authorizedPerson || b.customerName} · {b.customerEmail || '—'}</p>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <p className="bp-name">{b.customerName}</p>
+                                                        <p className="bp-email">{b.customerEmail || '—'}</p>
+                                                    </>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
-                                </td>
-                                <td>
-                                    <p className="bp-car">{b.carId?.title || b.car || '—'}</p>
-                                    {b.qty > 1 && <p className="bp-qty">× {b.qty} units</p>}
-                                </td>
-                                <td>
-                                    <p className="bp-date">{fmt(b.startDate)}</p>
-                                    <p className="bp-date bp-date--end">→ {fmt(b.endDate)}</p>
-                                </td>
-                                {/* Docs column */}
-                                <td>
-                                    {b.docsVerified ? (
-                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#d1fae5', color: '#065f46', fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 20, border: '1px solid #a7f3d0' }}>
-                                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                                            Verified
-                                        </span>
-                                    ) : b.docsRejected ? (
-                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#fee2e2', color: '#991b1b', fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 20, border: '1px solid #fecaca' }}>
-                                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                            Rejected
-                                        </span>
-                                    ) : (b.kycDocUrls?.length > 0) ? (
-                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#fef9c3', color: '#854d0e', fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 20, border: '1px solid #fde68a' }}>
-                                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                                            Review
-                                        </span>
-                                    ) : (
-                                        <span style={{ fontSize: '0.75rem', color: '#d1d5db', fontStyle: 'italic' }}>None</span>
-                                    )}
-                                </td>
-                                <td>
-                                    {b.quotedPrice
-                                        ? <span className="bp-cost">{fmtCur(b.quotedPrice)}</span>
-                                        : <span style={{ fontSize: '0.78rem', color: '#9ca3af', fontStyle: 'italic' }}>Not quoted</span>
-                                    }
-                                </td>
-                                <td><PaymentPill status={b.paymentStatus || 'Unpaid'} /></td>
-                                <td><StatusBadge status={b.status} /></td>
-                                <td><p className="bp-booked">{fmt(b.createdAt)}</p></td>
-                                <td onClick={e => e.stopPropagation()}>
-                                    <button className="bp-view-btn" onClick={() => setSelected(b)}>View</button>
-                                </td>
-                            </tr>
-                        ))}
+                                    </td>
+                                    <td>
+                                        <p className="bp-car">{b.carId?.title || b.car || '—'}</p>
+                                        {b.qty > 1 && <p className="bp-qty">× {b.qty} units</p>}
+                                    </td>
+                                    <td>
+                                        <p className="bp-date">{fmt(b.startDate)}</p>
+                                        <p className="bp-date bp-date--end">→ {fmt(b.endDate)}</p>
+                                    </td>
+                                    <td>
+                                        {b.docsVerified ? (
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#d1fae5', color: '#065f46', fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 20, border: '1px solid #a7f3d0' }}>
+                                                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                                Verified
+                                            </span>
+                                        ) : b.docsRejected ? (
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#fee2e2', color: '#991b1b', fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 20, border: '1px solid #fecaca' }}>
+                                                Rejected
+                                            </span>
+                                        ) : (b.kycDocUrls?.length > 0) ? (
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#fef9c3', color: '#854d0e', fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 20, border: '1px solid #fde68a' }}>
+                                                Review
+                                            </span>
+                                        ) : (
+                                            <span style={{ fontSize: '0.75rem', color: '#d1d5db', fontStyle: 'italic' }}>None</span>
+                                        )}
+                                    </td>
+                                    <td>
+                                        {b.quotedPrice
+                                            ? <span className="bp-cost">{fmtCur(b.quotedPrice)}</span>
+                                            : <span style={{ fontSize: '0.78rem', color: '#9ca3af', fontStyle: 'italic' }}>Not quoted</span>
+                                        }
+                                    </td>
+                                    <td><PaymentPill status={b.paymentStatus || 'Unpaid'} /></td>
+                                    <td><StatusBadge status={b.status} /></td>
+                                    <td><p className="bp-booked">{fmt(b.createdAt)}</p></td>
+                                    <td onClick={e => e.stopPropagation()}>
+                                        <button className="bp-view-btn" onClick={() => setSelected(b)}>View</button>
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
@@ -1396,7 +1196,6 @@ export default function BookingsPage() {
                 </div>
             )}
 
-            {/* CSS extras */}
             <style>{`
                 .bp-badge--unverified { background: #fef9c3; color: #854d0e; border: 1px solid #fde68a; }
                 .bp-drawer__status-banner--unverified { background: #fffbeb; }

@@ -10,7 +10,6 @@ const bookingSchema = new mongoose.Schema({
     pickupLocation: { type: String, trim: true },
     status: {
         type: String,
-        // Unverified → Pending → Active → Completed
         enum: ['Unverified', 'Pending', 'Active', 'Completed', 'Cancelled'],
         default: 'Unverified',
     },
@@ -21,10 +20,15 @@ const bookingSchema = new mongoose.Schema({
     // Customer type flag so admin knows what docs to expect
     customerType:   { type: String, enum: ['individual', 'business'], default: 'individual' },
 
+    // ── Business booking fields ────────────────────────────────────────────
+    // Stored directly on booking so they survive customer record updates
+    businessName:     { type: String, trim: true, default: '' },
+    authorizedPerson: { type: String, trim: true, default: '' },
+
     // Document verification tracking
     docsVerified:   { type: Boolean, default: false },
     docsVerifiedAt: { type: Date,    default: null },
-    docsVerifiedBy: { type: String,  default: null }, // admin username or id
+    docsVerifiedBy: { type: String,  default: null },
     docsRejected:   { type: Boolean, default: false },
     docsRejectedAt: { type: Date,    default: null },
     docsRejectReason: { type: String, trim: true, default: '' },

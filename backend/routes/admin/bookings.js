@@ -1,4 +1,3 @@
-
 import { Router } from 'express';
 import mongoose from 'mongoose';
 import Booking from '../../models/booking.js';
@@ -20,26 +19,30 @@ import { generateReceiptPDF } from '../../utils/pdf.js';
 const router = Router();
 router.use(requireAdmin);
 
-// ── Statuses that are considered "terminal" (no more stock changes needed) ────
-const TERMINAL_STATUSES = ['Completed', 'Cancelled'];
-
-// ── Statuses that still hold stock (restoring needed on cancel/complete) ──────
+const TERMINAL_STATUSES      = ['Completed', 'Cancelled'];
 const STOCK_HOLDING_STATUSES = ['Unverified', 'Pending', 'Active'];
 
-// ── helper: load a booking fully populated with payment data ─────────────────
+// ── helper: load a booking fully populated ────────────────────────────────────
 async function loadFull(id) {
     const booking = await Booking.findById(id)
         .populate('carId',      'title type image dailyRate')
-        .populate('customerId', 'name email phone')
+        .populate('customerId', 'name email phone customerType businessName authorizedPerson')
         .lean();
     if (!booking) return null;
 
     const payment = await BookingPayment.findOne({ bookingId: id }).lean();
+
     return {
         ...booking,
-        customerName:  booking.customerId?.name  || '',
-        customerEmail: booking.customerId?.email || '',
-        customerPhone: booking.customerId?.phone || '',
+        // Individual-facing fields
+        customerName:     booking.customerId?.name  || '',
+        customerEmail:    booking.customerId?.email || '',
+        customerPhone:    booking.customerId?.phone || '',
+        // Business fields — booking-level takes priority over customer record
+        customerType:     booking.customerType     || booking.customerId?.customerType     || 'individual',
+        businessName:     booking.businessName     || booking.customerId?.businessName     || '',
+        authorizedPerson: booking.authorizedPerson || booking.customerId?.authorizedPerson || '',
+        // Payment fields
         ...(payment ? {
             quotedPrice:   payment.quotedPrice,
             quotedAt:      payment.quotedAt,
@@ -52,14 +55,12 @@ async function loadFull(id) {
     };
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// GET /api/admin/bookings
-// ────────────────────────────────────────────────────────────────────────────
+// ── GET /api/admin/bookings ───────────────────────────────────────────────────
 router.get('/', async (req, res) => {
     try {
         const bookings = await Booking.find()
             .populate('carId',      'title type image dailyRate')
-            .populate('customerId', 'name email phone')
+            .populate('customerId', 'name email phone customerType businessName authorizedPerson')
             .sort({ createdAt: -1 })
             .lean();
 
@@ -71,9 +72,12 @@ router.get('/', async (req, res) => {
             const pay = payMap[String(b._id)] || {};
             return {
                 ...b,
-                customerName:  b.customerId?.name  || '',
-                customerEmail: b.customerId?.email || '',
-                customerPhone: b.customerId?.phone || '',
+                customerName:     b.customerId?.name  || '',
+                customerEmail:    b.customerId?.email || '',
+                customerPhone:    b.customerId?.phone || '',
+                customerType:     b.customerType     || b.customerId?.customerType     || 'individual',
+                businessName:     b.businessName     || b.customerId?.businessName     || '',
+                authorizedPerson: b.authorizedPerson || b.customerId?.authorizedPerson || '',
                 quotedPrice:   pay.quotedPrice   ?? null,
                 amountPaid:    pay.amountPaid    ?? 0,
                 paymentStatus: pay.paymentStatus ?? 'Unpaid',
@@ -89,11 +93,7 @@ router.get('/', async (req, res) => {
     }
 });
 
-// ────────────────────────────────────────────────────────────────────────────
-// POST /api/admin/bookings/:id/verify-docs
-// Verifies KYC documents → moves booking Unverified → Pending
-// This is the ONLY way to reach 'Pending'.
-// ────────────────────────────────────────────────────────────────────────────
+// ── POST /api/admin/bookings/:id/verify-docs ──────────────────────────────────
 router.post('/:id/verify-docs', async (req, res) => {
     try {
         const booking = await Booking.findById(req.params.id)
@@ -121,7 +121,7 @@ router.post('/:id/verify-docs', async (req, res) => {
         booking.status           = 'Pending';
         await booking.save();
 
-        const populated = await loadFull(booking._id);
+        const populated     = await loadFull(booking._id);
         const customerEmail = booking.customerId?.email || '';
 
         if (customerEmail) {
@@ -138,10 +138,7 @@ router.post('/:id/verify-docs', async (req, res) => {
     }
 });
 
-// ────────────────────────────────────────────────────────────────────────────
-// POST /api/admin/bookings/:id/reject-docs
-// Rejects KYC documents → cancels booking, restores stock, emails customer
-// ────────────────────────────────────────────────────────────────────────────
+// ── POST /api/admin/bookings/:id/reject-docs ──────────────────────────────────
 router.post('/:id/reject-docs', async (req, res) => {
     const { reason = '' } = req.body;
 
@@ -165,7 +162,6 @@ router.post('/:id/reject-docs', async (req, res) => {
             });
         }
 
-        // Restore stock (booking was holding a reservation)
         const carId = booking.carId?._id || booking.carId;
         const car   = await Car.findById(carId).session(session);
         if (car) {
@@ -201,17 +197,10 @@ router.post('/:id/reject-docs', async (req, res) => {
     }
 });
 
-// ────────────────────────────────────────────────────────────────────────────
-// PUT /api/admin/bookings/:id/status
-// Allowed manual transitions:
-//   Pending   → Active | Cancelled
-//   Active    → Completed | Cancelled
-//   (Unverified → Pending is handled ONLY by verify-docs above)
-// ────────────────────────────────────────────────────────────────────────────
+// ── PUT /api/admin/bookings/:id/status ────────────────────────────────────────
 router.put('/:id/status', async (req, res) => {
     const { status } = req.body;
 
-    // Manually settable statuses (NOT including Pending — that's verify-docs only)
     const MANUAL_ALLOWED = ['Active', 'Completed', 'Cancelled'];
     if (!MANUAL_ALLOWED.includes(status))
         return res.status(400).json({
@@ -229,7 +218,6 @@ router.put('/:id/status', async (req, res) => {
             return res.status(404).json({ message: 'Booking not found.' });
         }
 
-        // Guard: cannot activate an unverified booking
         if (status === 'Active' && booking.status === 'Unverified') {
             await session.abortTransaction(); session.endSession();
             return res.status(400).json({
@@ -237,7 +225,6 @@ router.put('/:id/status', async (req, res) => {
             });
         }
 
-        // Guard: require at least partial payment for Active
         const payment = await BookingPayment.findOne({ bookingId: booking._id }).session(session);
 
         if (status === 'Active' && (!payment || payment.paymentStatus === 'Unpaid')) {
@@ -247,7 +234,6 @@ router.put('/:id/status', async (req, res) => {
             });
         }
 
-        // Guard: require full payment for Completed
         if (status === 'Completed' && (!payment || payment.paymentStatus !== 'Paid')) {
             await session.abortTransaction(); session.endSession();
             return res.status(400).json({
@@ -255,9 +241,8 @@ router.put('/:id/status', async (req, res) => {
             });
         }
 
-        // Restore stock when moving to a terminal status from a stock-holding status
         let car = null;
-        const movingToTerminal = TERMINAL_STATUSES.includes(status);
+        const movingToTerminal  = TERMINAL_STATUSES.includes(status);
         const currentlyHolding = STOCK_HOLDING_STATUSES.includes(booking.status);
         if (movingToTerminal && currentlyHolding) {
             car = await Car.findById(booking.carId).session(session);
@@ -274,7 +259,6 @@ router.put('/:id/status', async (req, res) => {
 
         const populated = await loadFull(booking._id);
 
-        // Send status-change email
         if (populated.customerEmail) {
             const carTitle = populated.carId?.title || car?.title || 'your vehicle';
             if (status === 'Active') {
@@ -297,10 +281,7 @@ router.put('/:id/status', async (req, res) => {
     }
 });
 
-// ────────────────────────────────────────────────────────────────────────────
-// PUT /api/admin/bookings/:id/quote
-// Only available when booking is Pending or Active (docs verified)
-// ────────────────────────────────────────────────────────────────────────────
+// ── PUT /api/admin/bookings/:id/quote ─────────────────────────────────────────
 router.put('/:id/quote', async (req, res) => {
     const { quotedPrice, paymentNotes } = req.body;
 
@@ -313,10 +294,9 @@ router.put('/:id/quote', async (req, res) => {
             .populate('carId',      'title type image dailyRate');
         if (!booking) return res.status(404).json({ message: 'Booking not found.' });
 
-        // Quoting is locked until docs are verified
         if (booking.status === 'Unverified')
             return res.status(400).json({
-                message: "Documents must be verified before setting a quote. Verify the customer's KYC documents first.",
+                message: "Documents must be verified before setting a quote.",
             });
 
         if (TERMINAL_STATUSES.includes(booking.status))
@@ -350,9 +330,7 @@ router.put('/:id/quote', async (req, res) => {
     }
 });
 
-// ────────────────────────────────────────────────────────────────────────────
-// PUT /api/admin/bookings/:id/payment
-// ────────────────────────────────────────────────────────────────────────────
+// ── PUT /api/admin/bookings/:id/payment ───────────────────────────────────────
 router.put('/:id/payment', async (req, res) => {
     const { amountPaid, paymentMethod, paymentNotes } = req.body;
 
@@ -392,9 +370,7 @@ router.put('/:id/payment', async (req, res) => {
     }
 });
 
-// ────────────────────────────────────────────────────────────────────────────
-// DELETE /api/admin/bookings/:id
-// ────────────────────────────────────────────────────────────────────────────
+// ── DELETE /api/admin/bookings/:id ────────────────────────────────────────────
 router.delete('/:id', async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -405,7 +381,6 @@ router.delete('/:id', async (req, res) => {
             return res.status(404).json({ message: 'Booking not found.' });
         }
 
-        // Restore stock if booking was still holding a vehicle reservation
         if (STOCK_HOLDING_STATUSES.includes(booking.status)) {
             const car = await Car.findById(booking.carId).session(session);
             if (car) {
@@ -428,10 +403,7 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
-// ────────────────────────────────────────────────────────────────────────────
-// PUT /api/admin/bookings/:id/adjust
-// Adjusts rental dates (Pending or Active only)
-// ────────────────────────────────────────────────────────────────────────────
+// ── PUT /api/admin/bookings/:id/adjust ───────────────────────────────────────
 router.put('/:id/adjust', async (req, res) => {
     const { startDate, endDate, reason } = req.body;
     if (!endDate) return res.status(400).json({ message: 'endDate is required.' });
@@ -443,7 +415,7 @@ router.put('/:id/adjust', async (req, res) => {
 
         if (!['Pending', 'Active'].includes(booking.status))
             return res.status(400).json({
-                message: `Cannot adjust a "${booking.status}" booking. Only Pending or Active bookings can be adjusted.`,
+                message: `Cannot adjust a "${booking.status}" booking.`,
             });
 
         const newEnd   = new Date(endDate);  newEnd.setHours(0, 0, 0, 0);
@@ -469,7 +441,6 @@ router.put('/:id/adjust', async (req, res) => {
         booking.rentalDays = newRentalDays;
         await booking.save();
 
-        // Adjust quoted price proportionally if a daily rate exists
         const dailyRate = booking.carId?.dailyRate ?? 0;
         if (dailyRate > 0 && dayDiff !== 0) {
             const payment = await BookingPayment.findOne({ bookingId: booking._id });
@@ -492,37 +463,25 @@ router.put('/:id/adjust', async (req, res) => {
     }
 });
 
-// ────────────────────────────────────────────────────────────────────────────
-// GET /api/admin/bookings/:id/receipt
-// SECURITY FIX: Receipt is ONLY available for 'Completed' bookings.
-// A receipt implies full payment and a closed rental — issuing one for
-// Unverified / Pending / Active bookings could create fraudulent-looking
-// documents. The frontend already restricts the Print button to Completed,
-// but this backend guard ensures the API cannot be called directly.
-// ────────────────────────────────────────────────────────────────────────────
+// ── GET /api/admin/bookings/:id/receipt ───────────────────────────────────────
 router.get('/:id/receipt', async (req, res) => {
     try {
         const booking = await Booking.findById(req.params.id).lean();
 
-        if (!booking) {
+        if (!booking)
             return res.status(404).json({ message: 'Booking not found.' });
-        }
 
-        // ── SECURITY: only allow receipts for completed, fully-paid bookings ──
-        if (booking.status !== 'Completed') {
+        if (booking.status !== 'Completed')
             return res.status(403).json({
                 message: `Receipts can only be generated for Completed bookings. This booking is "${booking.status}".`,
             });
-        }
 
         const full = await loadFull(req.params.id);
 
-        // Double-check payment status as an extra guard
-        if (full.paymentStatus !== 'Paid') {
+        if (full.paymentStatus !== 'Paid')
             return res.status(403).json({
                 message: 'Receipts can only be generated for fully paid bookings.',
             });
-        }
 
         const pdfBuffer = await generateReceiptPDF(full, full.carId?.title || 'Vehicle');
         res.set({
