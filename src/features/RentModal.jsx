@@ -342,8 +342,8 @@ function LocationPicker({ value, onChange, disabled }) {
     );
 }
 
-// ── Document Upload Component (images only — PDF removed) ─────────────────────
-function DocUpload({ label, hint, accept = 'image/*', value, onChange, required = false, uploadedUrl, onUploaded, disabled: externalDisabled = false }) {
+// ── Document Upload Component ─────────────────────────────────────────────────
+function DocUpload({ label, hint, value, onChange, required = false, uploadedUrl, onUploaded, disabled: externalDisabled = false }) {
     const fileRef        = useRef(null);
     const [preview,     setPreview]     = useState(null);
     const [dragging,    setDragging]    = useState(false);
@@ -357,13 +357,11 @@ function DocUpload({ label, hint, accept = 'image/*', value, onChange, required 
         if (!file) return;
         setUploadError('');
 
-        // Show local image preview immediately
         onChange(file);
         const reader = new FileReader();
         reader.onload = e => setPreview(e.target.result);
         reader.readAsDataURL(file);
 
-        // Upload to Cloudinary
         setUploading(true);
         try {
             const url = await uploadDocToCloudinary(file);
@@ -425,7 +423,6 @@ function DocUpload({ label, hint, accept = 'image/*', value, onChange, required 
                     opacity: disabled && !value ? 0.6 : 1,
                 }}
             >
-                {/* Empty state */}
                 {!value && (
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, pointerEvents: 'none' }}>
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -440,7 +437,6 @@ function DocUpload({ label, hint, accept = 'image/*', value, onChange, required 
                     </div>
                 )}
 
-                {/* Image preview — PDF branch removed */}
                 {value && preview && (
                     <>
                         <img src={preview} alt="preview" style={{ width: 52, height: 38, objectFit: 'cover', borderRadius: 6, border: `1px solid ${isUploaded ? '#d1fae5' : '#fde68a'}`, flexShrink: 0 }} />
@@ -451,7 +447,6 @@ function DocUpload({ label, hint, accept = 'image/*', value, onChange, required 
                     </>
                 )}
 
-                {/* Upload spinner / done / change button */}
                 {value && (
                     <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
                         {uploading ? (
@@ -490,12 +485,10 @@ function DocUpload({ label, hint, accept = 'image/*', value, onChange, required 
                     </div>
                 )}
 
-                {/* Images only — accept filtered to image extensions */}
                 <input ref={fileRef} type="file" accept={DOC_ALLOWED_EXT.join(',')} style={{ display: 'none' }}
                     onChange={e => handleFile(e.target.files[0])} disabled={disabled} />
             </div>
 
-            {/* Upload error */}
             {uploadError && (
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 7, padding: '7px 10px' }}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
@@ -505,7 +498,6 @@ function DocUpload({ label, hint, accept = 'image/*', value, onChange, required 
                 </div>
             )}
 
-            {/* Uploaded success hint */}
             {isUploaded && !uploadError && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -680,11 +672,8 @@ function SectionLabel({ children, icon }) {
 function RentModal({ car, allCars = [], onClose, onConfirm }) {
     const [customerType, setCustomerType] = useState('individual');
 
-    const [customer, setCustomer] = useState({
-        fullName: '',
-        phone:    '',
-        email:    '',
-    });
+    // Individual fields
+    const [customer, setCustomer] = useState({ fullName: '', phone: '', email: '' });
 
     // Individual docs
     const [idFile,     setIdFile]     = useState(null);
@@ -692,11 +681,13 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
     const [selfieFile, setSelfieFile] = useState(null);
     const [selfieUrl,  setSelfieUrl]  = useState('');
 
+    // ── FIX: Business fields stored separately ────────────────────────────────
+    const [busName,    setBusName]    = useState('');         // company/business name
+    const [authPerson, setAuthPerson] = useState('');         // authorized representative name
+    const [authPhone,  setAuthPhone]  = useState('');         // company phone
+    const [authEmail,  setAuthEmail]  = useState('');         // company email
+
     // Business docs
-    const [busName,    setBusName]    = useState('');
-    const [authPerson, setAuthPerson] = useState('');
-    const [authPhone,  setAuthPhone]  = useState('');
-    const [authEmail,  setAuthEmail]  = useState('');
     const [bizRegFile, setBizRegFile] = useState(null);
     const [bizRegUrl,  setBizRegUrl]  = useState('');
     const [authIdFile, setAuthIdFile] = useState(null);
@@ -741,7 +732,9 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
         setCustomer({ fullName: '', phone: '', email: '' });
         setIdFile(null);       setIdUrl('');
         setSelfieFile(null);   setSelfieUrl('');
-        setBusName('');        setAuthPerson(''); setAuthPhone(''); setAuthEmail('');
+        // Reset business fields
+        setBusName('');        setAuthPerson('');
+        setAuthPhone('');      setAuthEmail('');
         setBizRegFile(null);   setBizRegUrl('');
         setAuthIdFile(null);   setAuthIdUrl('');
         setCustomerType('individual');
@@ -762,7 +755,7 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
         });
         if (Object.keys(newErrors).length > 0) { setErrorMap(newErrors); return; }
 
-        // Document validation — URL must be present (upload complete)
+        // ── FIX: Validate business fields properly ────────────────────────────
         if (customerType === 'individual') {
             if (!idFile) {
                 setDocError("Please upload a photo of your Driver's License or valid government ID.");
@@ -773,20 +766,33 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
                 return;
             }
         } else {
-            if (!bizRegFile || !bizRegUrl) {
-                setDocError(!bizRegFile
-                    ? 'Please upload a photo of your Business Registration document.'
-                    : 'Your business registration photo is still uploading — please wait.');
-                return;
-            }
-            if (!authIdFile || !authIdUrl) {
-                setDocError(!authIdFile
-                    ? "Please upload a photo of the authorized person's valid ID."
-                    : "The authorized person's ID photo is still uploading — please wait.");
+            // Business validations
+            if (!busName.trim()) {
+                setDocError('Please enter your company or business name.');
                 return;
             }
             if (!authPerson.trim()) {
                 setDocError('Please enter the name of the authorized person.');
+                return;
+            }
+            if (!authEmail.trim()) {
+                setDocError('Please enter a company contact email address.');
+                return;
+            }
+            if (!bizRegFile) {
+                setDocError('Please upload a photo of your Business Registration document.');
+                return;
+            }
+            if (bizRegFile && !bizRegUrl) {
+                setDocError('Your business registration photo is still uploading — please wait.');
+                return;
+            }
+            if (!authIdFile) {
+                setDocError("Please upload a photo of the authorized person's valid ID.");
+                return;
+            }
+            if (authIdFile && !authIdUrl) {
+                setDocError("The authorized person's ID photo is still uploading — please wait.");
                 return;
             }
         }
@@ -803,25 +809,42 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
 
         setSubmitting(true);
         try {
-            const bookings = cart.map(item => ({
-                carId:          item.car._id,
-                qty:            item.qty,
-                customerName:   customerType === 'business'
-                    ? `${authPerson.trim()} (${busName.trim() || 'Business'})`
-                    : customer.fullName,
-                customerEmail:  customerType === 'business' ? authEmail : customer.email,
-                customerPhone:  customerType === 'business' ? authPhone : customer.phone,
-                startDate:      new Date(item.pickupDate).toISOString(),
-                endDate:        (() => {
-                    const d = new Date(item.pickupDate);
-                    d.setDate(d.getDate() + item.rentalDays - 1);
-                    return d.toISOString();
-                })(),
-                rentalDays:     item.rentalDays,
-                pickupLocation: resolveLocation(item.pickupLocation),
-                kycDocUrls,
-                customerType,
-            }));
+            // ── FIX: Build correct booking payload with separate business fields ──
+            const bookings = cart.map(item => {
+                const basePayload = {
+                    carId:          item.car._id,
+                    qty:            item.qty,
+                    startDate:      new Date(item.pickupDate).toISOString(),
+                    endDate:        (() => {
+                        const d = new Date(item.pickupDate);
+                        d.setDate(d.getDate() + item.rentalDays - 1);
+                        return d.toISOString();
+                    })(),
+                    rentalDays:     item.rentalDays,
+                    pickupLocation: resolveLocation(item.pickupLocation),
+                    kycDocUrls,
+                    customerType,
+                };
+
+                if (customerType === 'business') {
+                    return {
+                        ...basePayload,
+                        // ── FIX: send all fields the backend needs ──
+                        customerName:     authPerson.trim(),   // backend uses this as the contact name
+                        customerEmail:    authEmail.trim(),
+                        customerPhone:    authPhone.trim(),
+                        businessName:     busName.trim(),       // ← was missing before!
+                        authorizedPerson: authPerson.trim(),    // ← was missing before!
+                    };
+                } else {
+                    return {
+                        ...basePayload,
+                        customerName:  customer.fullName,
+                        customerEmail: customer.email,
+                        customerPhone: customer.phone,
+                    };
+                }
+            });
 
             await onConfirm(bookings);
             setSubmitted(true);
@@ -1051,8 +1074,9 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
                                                     </svg>
                                                 }>Business Information</SectionLabel>
 
+                                                {/* ── FIX: Proper business name field ── */}
                                                 <div className="form-group">
-                                                    <label>Company / Business Name</label>
+                                                    <label>Company / Business Name <span style={{ color: '#ef4444' }}>*</span></label>
                                                     <input type="text" required placeholder="Acme Corporation"
                                                         value={busName}
                                                         onChange={e => setBusName(e.target.value)}
@@ -1065,8 +1089,9 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
                                                     </svg>
                                                 }>Authorized Representative</SectionLabel>
 
+                                                {/* ── FIX: Separate authorized person field ── */}
                                                 <div className="form-group">
-                                                    <label>Name of Authorized Person</label>
+                                                    <label>Name of Authorized Person <span style={{ color: '#ef4444' }}>*</span></label>
                                                     <input type="text" required placeholder="Maria Santos"
                                                         value={authPerson}
                                                         onChange={e => setAuthPerson(e.target.value)}
@@ -1075,7 +1100,7 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
 
                                                 <div className="form-group">
                                                     <label>Company Contact Number</label>
-                                                    <input type="tel" required placeholder="0912 345 6789"
+                                                    <input type="tel" placeholder="0912 345 6789"
                                                         value={authPhone}
                                                         onChange={e => {
                                                             const raw = e.target.value.replace(/\D/g, '').slice(0, 11);
@@ -1088,7 +1113,7 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
                                                 </div>
 
                                                 <div className="form-group">
-                                                    <label>Company Email Address</label>
+                                                    <label>Company Email Address <span style={{ color: '#ef4444' }}>*</span></label>
                                                     <input type="email" required placeholder="info@company.com"
                                                         value={authEmail}
                                                         onChange={e => setAuthEmail(e.target.value)}
