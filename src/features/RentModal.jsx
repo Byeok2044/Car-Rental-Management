@@ -896,7 +896,6 @@ function RentModal({ car, allCars = [], onClose, onConfirm }) {
                                 </p>
                                 <div style={{ display: 'flex', gap: '10px' }}>
                                     <Button onClick={resetForm}>Book Another</Button>
-                                    <button className="cancel-btn" onClick={onClose}>Close Window</button>
                                 </div>
                             </div>
                         ) : (
