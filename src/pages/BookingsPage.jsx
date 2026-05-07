@@ -921,7 +921,7 @@ export default function BookingsPage() {
     const fetchBookings = useCallback(async () => {
         setLoading(true); setError('');
         try {
-            const data = await apiFetch('/api/bookings');
+            const data = await apiFetch('/api/admin/bookings');
             setBookings(Array.isArray(data) ? data : []);
         } catch (err) { setError(err.message); }
         finally { setLoading(false); }
@@ -1088,13 +1088,29 @@ export default function BookingsPage() {
                             ))
                         ) : paginated.length === 0 ? (
                             <tr>
-                                <td colSpan={10} className="bp-empty-cell">
-                                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.5" style={{ marginBottom: 8 }}>
-                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                                        <polyline points="14 2 14 8 20 8"/>
-                                    </svg>
-                                    <p style={{ margin: 0, fontWeight: 600 }}>No bookings found</p>
-                                    {search && <p style={{ margin: '4px 0 0', fontSize: '0.82rem' }}>Try a different search term</p>}
+                                <td colSpan={10}>
+                                    <div style={{ 
+                                        display: 'flex', 
+                                        flexDirection: 'column', 
+                                        alignItems: 'center', 
+                                        justifyContent: 'center', 
+                                        padding: '60px 20px', // Increased padding for better vertical centering
+                                        width: '100%',
+                                        color: '#9ca3af' 
+                                    }}>
+                                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ marginBottom: 12, opacity: 0.5 }}>
+                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                            <polyline points="14 2 14 8 20 8"/>
+                                        </svg>
+                                        <p style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#4b5563' }}>
+                                            No bookings found
+                                        </p>
+                                        {search && (
+                                            <p style={{ margin: '4px 0 0', fontSize: '0.875rem' }}>
+                                                No results match "{search}"
+                                            </p>
+                                        )}
+                                    </div>
                                 </td>
                             </tr>
                         ) : paginated.map((b, i) => {
