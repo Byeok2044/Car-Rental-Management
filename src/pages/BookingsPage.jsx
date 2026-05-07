@@ -921,7 +921,7 @@ export default function BookingsPage() {
     const fetchBookings = useCallback(async () => {
         setLoading(true); setError('');
         try {
-            const data = await apiFetch('/api/bookings');
+            const data = await apiFetch('/api/admin/bookings');
             setBookings(Array.isArray(data) ? data : []);
         } catch (err) { setError(err.message); }
         finally { setLoading(false); }
