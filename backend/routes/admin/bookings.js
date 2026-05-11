@@ -11,6 +11,7 @@ import {
     buildActiveEmail,
     buildCompletedEmail,
     buildQuoteEmail,
+    buildQuoteUpdatedEmail,          // ← was missing
     buildDocsVerifiedEmail,
     buildDocsRejectedEmail,
 } from '../../utils/email.js';
@@ -34,15 +35,12 @@ async function loadFull(id) {
 
     return {
         ...booking,
-        // Individual-facing fields
         customerName:     booking.customerId?.name  || '',
         customerEmail:    booking.customerId?.email || '',
         customerPhone:    booking.customerId?.phone || '',
-        // Business fields — booking-level takes priority over customer record
         customerType:     booking.customerType     || booking.customerId?.customerType     || 'individual',
         businessName:     booking.businessName     || booking.customerId?.businessName     || '',
         authorizedPerson: booking.authorizedPerson || booking.customerId?.authorizedPerson || '',
-        // Payment fields
         ...(payment ? {
             quotedPrice:   payment.quotedPrice,
             quotedAt:      payment.quotedAt,
@@ -282,6 +280,11 @@ router.put('/:id/status', async (req, res) => {
 });
 
 // ── PUT /api/admin/bookings/:id/quote ─────────────────────────────────────────
+//
+// FIX: Detect whether a quoted price already exists so we can send the correct
+// email — buildQuoteEmail (first quote) vs buildQuoteUpdatedEmail (revision).
+// Previously the route always sent buildQuoteEmail even on updates.
+//
 router.put('/:id/quote', async (req, res) => {
     const { quotedPrice, paymentNotes } = req.body;
 
@@ -296,13 +299,19 @@ router.put('/:id/quote', async (req, res) => {
 
         if (booking.status === 'Unverified')
             return res.status(400).json({
-                message: "Documents must be verified before setting a quote.",
+                message: 'Documents must be verified before setting a quote.',
             });
 
         if (TERMINAL_STATUSES.includes(booking.status))
             return res.status(400).json({
                 message: `Cannot quote a ${booking.status} booking.`,
             });
+
+        // Capture the previous quoted price BEFORE the update so we can
+        // decide which email to send and show the before/after diff.
+        const existingPayment = await BookingPayment.findOne({ bookingId: booking._id });
+        const previousPrice   = existingPayment?.quotedPrice ?? null;   // null = brand-new quote
+        const isUpdate        = previousPrice !== null && previousPrice !== Number(quotedPrice);
 
         await BookingPayment.findOneAndUpdate(
             { bookingId: booking._id },
@@ -316,13 +325,30 @@ router.put('/:id/quote', async (req, res) => {
         );
 
         const populated = await loadFull(booking._id);
+        const carTitle  = populated.carId?.title || 'your vehicle';
 
         if (populated.customerEmail) {
-            const { subject, html } = buildQuoteEmail(populated, populated.carId?.title || 'your vehicle');
-            sendEmail(populated.customerEmail, subject, html);
+            if (isUpdate) {
+                // Admin is revising an existing quote → send the updated-quote email
+                // which shows old price, new price, and the difference.
+                const { subject, html } = buildQuoteUpdatedEmail(
+                    populated,
+                    carTitle,
+                    previousPrice,
+                    Number(quotedPrice)
+                );
+                sendEmail(populated.customerEmail, subject, html);
+                console.log(
+                    `[quote-updated] booking ${booking._id} → ${fmtPeso(previousPrice)} → ${fmtPeso(quotedPrice)}`
+                );
+            } else {
+                // First-time quote → send the standard quote email
+                const { subject, html } = buildQuoteEmail(populated, carTitle);
+                sendEmail(populated.customerEmail, subject, html);
+                console.log(`[quote-new] booking ${booking._id} → ${fmtPeso(quotedPrice)}`);
+            }
         }
 
-        console.log(`[quote] booking ${booking._id} → ${fmtPeso(quotedPrice)}`);
         res.json({ message: 'Quote set successfully.', booking: populated });
     } catch (err) {
         console.error('quote error:', err);
