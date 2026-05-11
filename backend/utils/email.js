@@ -87,6 +87,72 @@ ${b.paymentNotes   ? `<tr><td>Notes</td><td>${b.paymentNotes}</td></tr>` : ''}
     };
 }
 
+// ── NEW: Quote Updated Email ───────────────────────────────────────────────────
+/**
+ * Sent when an admin updates an *existing* quoted price.
+ * Shows a clear before/after comparison with colour-coded change indicator.
+ *
+ * @param {Object} b         - Populated booking document (with customerName, etc.)
+ * @param {string} t         - Human-readable vehicle title
+ * @param {number} oldPrice  - The previous quoted price
+ * @param {number} newPrice  - The newly set quoted price
+ */
+export function buildQuoteUpdatedEmail(b, t, oldPrice, newPrice) {
+    const refNo        = `#${String(b._id).slice(-8).toUpperCase()}`;
+    const diff         = newPrice - oldPrice;
+    const isIncrease   = diff > 0;
+    const changeLabel  = isIncrease ? 'increased' : 'decreased';
+    const changeColor  = isIncrease ? '#991b1b' : '#065f46';
+    const changeBg     = isIncrease ? '#fee2e2' : '#f0fdf4';
+    const changeBorder = isIncrease ? '#fecaca' : '#a7f3d0';
+    const changeSign   = isIncrease ? '+' : '';
+    const headerAccent = isIncrease ? '#b91c1c' : '#065f46';
+
+    return {
+        subject: `Quote Updated (${changeSign}${fmtPeso(Math.abs(diff))}) — ${refNo} | ${BRAND}`,
+        html: htmlShell('Rental Quote Updated', `
+<p>Hi <strong>${b.customerName}</strong>,</p>
+<p>We want to let you know that the quoted price for your rental booking <strong>${refNo}</strong> has been <strong>${changeLabel}</strong> by our team.</p>
+
+<div style="background:${changeBg};border:1.5px solid ${changeBorder};border-radius:10px;padding:20px 24px;margin:24px 0">
+  <p style="margin:0 0 14px;font-size:.75rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:${changeColor}">
+    &#9650; Quote ${changeLabel.charAt(0).toUpperCase() + changeLabel.slice(1)}
+  </p>
+  <table style="margin:0;border:none">
+    <tr>
+      <td style="border:none;padding:6px 14px 6px 0;width:38%;font-weight:600;color:#374151">Previous Quote</td>
+      <td style="border:none;padding:6px 0;font-size:1.1rem;font-weight:700;color:#6b7280;text-decoration:line-through">${fmtPeso(oldPrice)}</td>
+    </tr>
+    <tr>
+      <td style="border:none;padding:6px 14px 6px 0;font-weight:700;color:${changeColor}">Updated Quote</td>
+      <td style="border:none;padding:6px 0;font-size:1.4rem;font-weight:800;color:${changeColor}">${fmtPeso(newPrice)}</td>
+    </tr>
+    <tr>
+      <td style="border:none;padding:6px 14px 6px 0;font-weight:600;color:#374151">Change</td>
+      <td style="border:none;padding:6px 0;font-size:.95rem;font-weight:700;color:${changeColor}">${changeSign}${fmtPeso(Math.abs(diff))}</td>
+    </tr>
+  </table>
+</div>
+
+<table>
+<tr><td>Reference</td><td>${refNo}</td></tr>
+<tr><td>Vehicle</td><td>${t}</td></tr>
+${(b.qty ?? 1) > 1 ? `<tr><td>Quantity</td><td>${b.qty} unit(s)</td></tr>` : ''}
+<tr><td>Pickup Date</td><td>${fmtDate(b.startDate)}</td></tr>
+<tr><td>Return Date</td><td>${fmtDate(b.endDate)}</td></tr>
+<tr><td>Rental Days</td><td>${b.rentalDays} day${b.rentalDays !== 1 ? 's' : ''}</td></tr>
+${b.pickupLocation ? `<tr><td>Pickup Location</td><td>${b.pickupLocation}</td></tr>` : ''}
+${b.paymentNotes   ? `<tr><td>Notes</td><td>${b.paymentNotes}</td></tr>` : ''}
+<tr class="tr"><td>New Total</td><td>${fmtPeso(newPrice)}</td></tr>
+</table>
+
+<p>If you have already made a partial payment, our team will factor this in when processing your balance.</p>
+<p>If you have any questions or concerns about this price change, please don't hesitate to contact us — we're happy to help.</p>
+<p>Warm regards,<br/><strong>${BRAND} Team</strong></p>
+        `, headerAccent),
+    };
+}
+
 export function buildActiveEmail(b, t) {
     return {
         subject: `Your Rental is Now Active - #${String(b._id).slice(-8).toUpperCase()} | ${BRAND}`,
