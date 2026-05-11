@@ -1,6 +1,3 @@
-// backend/seed_data.js
-
-
 import 'dotenv/config';
 import mongoose from 'mongoose';
 import Car from './models/cars.js';
@@ -8,7 +5,7 @@ import Customer from './models/Customer.js';
 import Booking from './models/booking.js';
 import BookingPayment from './models/BookingPayment.js';
 import { setServers } from 'node:dns/promises';
-setServers(['8.8.8.8', '1.1.1.1']); // Force standard DNS resolution
+setServers(['8.8.8.8', '1.1.1.1']); 
 
 const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/car_rental';
 
@@ -49,34 +46,31 @@ async function seedData() {
             });
         }
 
-        console.log('Cleaning up old historical dummy data...');
-        // Optional: comment out if you want to keep existing data
-        // await Booking.deleteMany({ status: 'Completed' }); 
-
         const bookings = [];
         const payments = [];
 
-        // 3. Generate 6 months of historical data
-        // ARIMA needs a time series (at least 3-6 months)
-        console.log('Generating 6 months of historical bookings...');
+        // 3. Generate bookings for July (6) to October (9) 2024
+        console.log('Generating historical bookings for July - Oct 2024...');
         
-        for (let i = 6; i >= 1; i--) {
-            const date = new Date();
-            date.setMonth(date.getMonth() - i);
-            date.setDate(1); // Start of month
+        const year = 2024;
+        const startMonth = 6; // July (0-indexed)
+        const endMonth = 9;   // October (0-indexed)
 
-            // Random number of bookings per month (e.g., 5 to 12)
-            const monthlyCount = Math.floor(Math.random() * 8) + 5;
+        for (let m = startMonth; m <= endMonth; m++) {
+            // Random number of bookings per month (e.g., 8 to 15)
+            // Increased slightly to give your ARIMA model better density
+            const monthlyCount = Math.floor(Math.random() * 8) + 8;
 
             for (let j = 0; j < monthlyCount; j++) {
                 const bId = new mongoose.Types.ObjectId();
-                const startDate = new Date(date);
-                startDate.setDate(j + 1);
+                
+                // Set the date within the specific month
+                const startDate = new Date(year, m, j + 1, 10, 0, 0);
                 
                 const endDate = new Date(startDate);
                 endDate.setDate(startDate.getDate() + 3);
 
-                const price = 1500 + (Math.floor(Math.random() * 500)); // Variable revenue
+                const price = 1800 + (Math.floor(Math.random() * 700)); 
 
                 bookings.push({
                     _id: bId,
@@ -86,7 +80,7 @@ async function seedData() {
                     startDate: startDate,
                     endDate: endDate,
                     rentalDays: 3,
-                    status: 'Completed', // ARIMA only looks at Completed status
+                    status: 'Completed',
                     createdAt: startDate,
                     updatedAt: startDate
                 });
@@ -106,7 +100,7 @@ async function seedData() {
         await Booking.insertMany(bookings);
         await BookingPayment.insertMany(payments);
 
-        console.log(`Successfully added ${bookings.length} bookings across 6 months.`);
+        console.log(`Successfully added ${bookings.length} bookings for July-Oct 2024.`);
         process.exit(0);
     } catch (err) {
         console.error('Seed Error:', err);
