@@ -420,9 +420,10 @@ const PERIOD_OPTIONS = [
 ];
 
 function PeriodDropdown({ value, onChange }) {
-    const [open, setOpen] = useState(false);
-    const ref             = useRef(null);
-    const selected        = PERIOD_OPTIONS.find(o => o.value === value) ?? PERIOD_OPTIONS[1];
+    const [open, setOpen]       = useState(false);
+    const [hovered, setHovered] = useState(false);
+    const ref                   = useRef(null);
+    const selected              = PERIOD_OPTIONS.find(o => o.value === value) ?? PERIOD_OPTIONS[1];
 
     useEffect(() => {
         if (!open) return;
@@ -431,45 +432,72 @@ function PeriodDropdown({ value, onChange }) {
         return () => document.removeEventListener('mousedown', handler);
     }, [open]);
 
+    // Three visual states with persistent blue tint at rest — never invisible
+    const bg          = open    ? `${T.blue}22`
+                      : hovered ? `${T.blue}1a`
+                      :           `${T.blue}0f`;   // always a faint blue, even at rest
+
+    const border      = open    ? T.blue
+                      : hovered ? `${T.blue}90`
+                      :           `${T.blue}55`;   // blue-tinted border at rest, not grey
+
+    const labelColor  = open    ? T.blue : 'var(--color-text-primary)';
+    const subColor    = open    ? `${T.blue}99` : 'var(--color-text-secondary)';
+    const dividerBg   = open    ? `${T.blue}50` : `${T.blue}30`;
+    const chevronColor= open    ? T.blue : `${T.blue}bb`;
+
     return (
         <div ref={ref} style={{ position: 'relative', userSelect: 'none' }}>
             <button
                 onClick={() => setOpen(o => !o)}
+                onMouseEnter={() => setHovered(true)}
+                onMouseLeave={() => setHovered(false)}
                 style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: 10,
-                    padding: '7px 12px 7px 14px',
-                    background: 'var(--color-background-primary)',
-                    border: `0.5px solid ${open ? T.blue : 'var(--color-border-secondary)'}`,
+                    padding: '8px 12px 8px 14px',
+                    background: bg,
+                    border: `1.5px solid ${border}`,
                     borderRadius: 10,
                     cursor: 'pointer',
                     fontFamily: 'var(--font-sans)',
-                    transition: 'border-color 0.15s',
-                    minWidth: 152,
+                    transition: 'border-color 0.15s, background 0.15s, box-shadow 0.15s',
+                    minWidth: 164,
+                    boxShadow: open ? `0 0 0 3px ${T.blue}18` : 'none',
+                    outline: 'none',
                 }}
             >
                 <div style={{ flex: 1, textAlign: 'left' }}>
-                    <p style={{ margin: 0, fontSize: 12, fontWeight: 500,
-                        color: 'var(--color-text-primary)', lineHeight: 1.2 }}>
+                    <p style={{
+                        margin: 0, fontSize: 12, fontWeight: 600, lineHeight: 1.2,
+                        color: labelColor,
+                        transition: 'color 0.15s',
+                    }}>
                         {selected.label}
                     </p>
-                    <p style={{ margin: 0, fontSize: 10,
-                        color: 'var(--color-text-secondary)', lineHeight: 1.3 }}>
+                    <p style={{
+                        margin: 0, fontSize: 10, lineHeight: 1.3,
+                        color: subColor,
+                        transition: 'color 0.15s',
+                    }}>
                         {selected.sub}
                     </p>
                 </div>
-                <span style={{ width: '0.5px', height: 24,
-                    background: 'var(--color-border-tertiary)', flexShrink: 0 }} />
+                <span style={{
+                    width: '1px', height: 22, flexShrink: 0,
+                    background: dividerBg,
+                    transition: 'background 0.15s',
+                }} />
                 <i
                     className="ti ti-chevron-down"
                     aria-hidden="true"
                     style={{
                         fontSize: 14,
-                        color: 'var(--color-text-secondary)',
+                        color: chevronColor,
                         flexShrink: 0,
                         display: 'inline-block',
-                        transition: 'transform 0.2s',
+                        transition: 'transform 0.2s, color 0.15s',
                         transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
                     }}
                 />
@@ -482,19 +510,18 @@ function PeriodDropdown({ value, onChange }) {
                     right: 0,
                     minWidth: 180,
                     background: 'var(--color-background-primary)',
-                    border: '0.5px solid var(--color-border-secondary)',
+                    border: `1px solid ${T.blue}30`,
                     borderRadius: 12,
                     padding: 4,
                     zIndex: 50,
-                    boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
+                    boxShadow: `0 4px 20px rgba(0,0,0,0.10), 0 0 0 1px ${T.blue}10`,
                 }}>
-                    <p style={{ margin: '6px 10px 6px', fontSize: 10, fontWeight: 500,
-                        color: 'var(--color-text-secondary)',
+                    <p style={{ margin: '6px 10px 6px', fontSize: 10, fontWeight: 600,
+                        color: T.blue, opacity: 0.7,
                         textTransform: 'uppercase', letterSpacing: '0.07em' }}>
                         Forecast period
                     </p>
-                    <div style={{ height: '0.5px', background: 'var(--color-border-tertiary)',
-                        margin: '0 4px 4px' }} />
+                    <div style={{ height: '1px', background: `${T.blue}18`, margin: '0 4px 4px' }} />
                     {PERIOD_OPTIONS.map(opt => {
                         const active = opt.value === value;
                         return (
@@ -523,7 +550,7 @@ function PeriodDropdown({ value, onChange }) {
                                 }}
                             >
                                 <div style={{ textAlign: 'left' }}>
-                                    <p style={{ margin: 0, fontSize: 13, fontWeight: active ? 500 : 400,
+                                    <p style={{ margin: 0, fontSize: 13, fontWeight: active ? 600 : 400,
                                         color: active ? T.blue : 'var(--color-text-primary)',
                                         lineHeight: 1.3 }}>
                                         {opt.label}
