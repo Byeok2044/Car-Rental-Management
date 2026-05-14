@@ -67,11 +67,14 @@ function Skeleton({ h = 200 }) {
 function MetricCard({ label, value, sub, accent }) {
     return (
         <div style={{
-            background: 'var(--color-background-secondary)',
-            borderRadius: 'var(--border-radius-md)',
+            // Uses the accent color with '09' for a 5% opacity tint
+            background: `${accent}09`,
+            // Uses the accent color with '30' for a 20% opacity border
+            border: `1.5px solid ${accent}30`,
+            borderRadius: '10px',
             padding: '16px 18px',
         }}>
-            <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 500,
+            <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 1000,
                 color: accent, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                 {label}
             </p>
@@ -87,8 +90,8 @@ function MetricCard({ label, value, sub, accent }) {
 function SectionCard({ title, subtitle, badge, badgeAccent, children, accentColor, style = {} }) {
     return (
         <div style={{
-            background: 'var(--color-background-primary)',
-            borderRadius: 'var(--border-radius-lg)',
+            background: '#ffffff',
+            borderRadius: '24px',
             border: '0.5px solid var(--color-border-tertiary)',
             overflow: 'hidden',
             ...style,
@@ -98,7 +101,7 @@ function SectionCard({ title, subtitle, badge, badgeAccent, children, accentColo
                 <div style={{ display: 'flex', alignItems: 'flex-start',
                     justifyContent: 'space-between', marginBottom: 16 }}>
                     <div>
-                        <p style={{ margin: 0, fontSize: 14, fontWeight: 500,
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 1000,
                             color: 'var(--color-text-primary)' }}>{title}</p>
                         {subtitle && (
                             <p style={{ margin: '3px 0 0', fontSize: 12,
@@ -350,13 +353,13 @@ function DataQualityBanner({ dq }) {
     const warn = !dq.arimaServiceAvailable || (!ok && dq.monthsOfData >= 3);
 
     const [bg, border, iconColor, textColor, icon] = ok
-        ? ['var(--color-background-success)', 'var(--color-border-success)', 'var(--color-text-success)', 'var(--color-text-success)', 'ti-circle-check']
+        ? ['#f0fdf4', '#bbf7d0', '#16a34a', '#16a34a', 'ti-circle-check']
         : warn
         ? ['var(--color-background-warning)', 'var(--color-border-warning)', 'var(--color-text-warning)', 'var(--color-text-warning)', 'ti-alert-triangle']
         : ['var(--color-background-danger)',  'var(--color-border-danger)',  'var(--color-text-danger)',  'var(--color-text-danger)',  'ti-circle-x'];
 
     return (
-        <div style={{ background: bg, border: `0.5px solid ${border}`, borderRadius: 'var(--border-radius-md)',
+        <div style={{ background: bg, border: `0.5px solid ${border}`, borderRadius: 10,
             padding: '12px 16px', marginBottom: 20,
             display: 'flex', alignItems: 'flex-start', gap: 12 }}>
             <i className={`ti ${icon}`} aria-hidden="true"
@@ -611,11 +614,11 @@ export default function ArimaForecastTab() {
                 <div>
                     <h3 style={{ margin: 0, fontSize: 16, fontWeight: 500,
                         color: 'var(--color-text-primary)' }}>
-                        ARIMA revenue & booking forecast
+                        ARIMA Revenue & Booking Forecast
                     </h3>
                     <p style={{ margin: '4px 0 0', fontSize: 12,
                         color: 'var(--color-text-secondary)' }}>
-                        Auto-regressive integrated moving average statistical model
+                        Auto-Regressive Integrated Moving Average Statistical Model
                         {updatedAt && (
                             <span style={{ marginLeft: 8, color: 'var(--color-text-secondary)', opacity: 0.6 }}>
                                 · Updated {updatedAt}
@@ -668,7 +671,7 @@ export default function ArimaForecastTab() {
                             />
                             <MetricCard
                                 label={`${data.nextMonth.label} · booking forecast`}
-                                value={`${data.nextMonth.bookings?.predicted ?? '—'} bookings`}
+                                value={`${data.nextMonth.bookings?.predicted ?? '—'} Bookings`}
                                 sub={`Range: ${data.nextMonth.bookings?.lower ?? '?'} – ${data.nextMonth.bookings?.upper ?? '?'}`}
                                 accent={T.green}
                             />
@@ -681,7 +684,7 @@ export default function ArimaForecastTab() {
                         gap: 20, marginBottom: 20 }}>
 
                         <SectionCard
-                            title="Revenue forecast"
+                            title="Revenue Forecast"
                             subtitle={`Next ${periods} months · ARIMA statistical model`}
                             accentColor={T.chartBlue}
                             badge={data.diagnostics?.revenue?.model}
@@ -711,7 +714,7 @@ export default function ArimaForecastTab() {
                         </SectionCard>
 
                         <SectionCard
-                            title="Booking forecast"
+                            title="Booking Forecast"
                             subtitle={`Next ${periods} months · booking count prediction`}
                             accentColor={T.chartGreen}
                             badge={data.diagnostics?.bookings?.model}
@@ -750,16 +753,16 @@ export default function ArimaForecastTab() {
                         borderRadius: 'var(--border-radius-md)',
                         border: '0.5px solid var(--color-border-tertiary)',
                         padding: '16px 20px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
                             <i className="ti ti-info-circle" aria-hidden="true"
                                 style={{ fontSize: 15, color: 'var(--color-text-secondary)' }} />
                             <p style={{ margin: 0, fontSize: 13, fontWeight: 500,
                                 color: 'var(--color-text-primary)' }}>
-                                About ARIMA forecasting
+                                About ARIMA Forecasting
                             </p>
                         </div>
                         <p style={{ margin: 0, fontSize: 12,
-                            color: 'var(--color-text-secondary)', lineHeight: 1.65 }}>
+                            color: 'var(--color-text-secondary)', lineHeight: 1.65, textIndent: '1.2em' }}>
                             ARIMA (Auto-Regressive Integrated Moving Average) models your historical revenue
                             and booking trends to predict future values. The model automatically selects the
                             degree of differencing (<em>d</em>) needed to make the series stationary.
