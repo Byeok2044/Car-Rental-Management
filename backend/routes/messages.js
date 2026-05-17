@@ -2,7 +2,6 @@ import { Router } from 'express';
 import Message from '../models/Message.js';
 import { contactLimiter } from '../middleware/rateLimiter.js';
 import { emailRegex, clean } from '../utils/helpers.js';
-import { callClassifier } from '../utils/classifier.js';
 
 const router = Router();
 
@@ -16,17 +15,14 @@ router.post('/', contactLimiter, async (req, res) => {
         if (!emailRegex.test(email))
             return res.status(400).json({ message: 'Invalid email address.' });
 
-        const { urgency, score, breakdown } = await callClassifier(message.trim(), subject?.trim() || '');
-
         const msg = await Message.create({
             name:    clean(name),
             email:   email.trim().toLowerCase(),
             subject: clean(subject || ''),
             message: clean(message),
-            urgency, urgencyScore: score, urgencyBreakdown: breakdown, urgencyMethod: 'rule-based',
         });
 
-        console.log(`New message from: ${msg.email} [urgency: ${urgency}, score: ${score}]`);
+        console.log(`New message from: ${msg.email}`);
         return res.status(201).json({ message: 'Message received. Thank you!', id: msg._id });
     } catch (err) {
         console.error('Message error:', err);
