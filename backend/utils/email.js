@@ -282,3 +282,20 @@ export function buildDocsRejectedEmail(booking, carTitle, reason) {
         `, '#dc2626'),
     };
 }
+
+export function buildOverdueEmail(b, t) {
+    return {
+        subject: `URGENT: Vehicle Overdue - #${String(b._id).slice(-8).toUpperCase()} | ${BRAND}`,
+        html: htmlShell('Rental Overdue', `
+            <p>Hi <strong>${b.customerName || 'Customer'}</strong>,</p>
+            <p>Our records indicate that your rental vehicle was scheduled for return on <strong>${fmtDate(b.endDate)}</strong> and is now officially <strong>Overdue</strong>.</p>
+            ${bookingTable(b, t)}
+            <div class="attach-note" style="border-color: #fca5a5; background: #fef2f2; color: #991b1b;">
+              <strong>⚠️ Late Fees Are Accruing</strong>
+              Please return the vehicle immediately to avoid further daily penalty charges. If you are experiencing an emergency, please contact us immediately.
+            </div>
+            <p>Please reach out to our support team right away to resolve this.</p>
+            <p>Warm regards,<br/><strong>${BRAND} Team</strong></p>
+        `, '#dc2626'), // Red accent color for urgency
+    };
+}

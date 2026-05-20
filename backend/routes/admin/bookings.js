@@ -21,7 +21,7 @@ const router = Router();
 router.use(requireAdmin);
 
 const TERMINAL_STATUSES      = ['Completed', 'Cancelled'];
-const STOCK_HOLDING_STATUSES = ['Unverified', 'Pending', 'Active'];
+const STOCK_HOLDING_STATUSES = ['Unverified', 'Pending', 'Active', 'Overdue'];
 
 // ── helper: load a booking fully populated ────────────────────────────────────
 async function loadFull(id) {
@@ -199,7 +199,7 @@ router.post('/:id/reject-docs', async (req, res) => {
 router.put('/:id/status', async (req, res) => {
     const { status } = req.body;
 
-    const MANUAL_ALLOWED = ['Active', 'Completed', 'Cancelled'];
+    const MANUAL_ALLOWED = ['Active', 'Completed', 'Cancelled', 'Overdue'];
     if (!MANUAL_ALLOWED.includes(status))
         return res.status(400).json({
             message: status === 'Pending'
