@@ -5,12 +5,15 @@ import KycDocsPanel from '../features/KycDocsPanel.jsx';
 const API_BASE_URL  = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const PER_PAGE      = 10;
 
-const STATUS_FILTERS = ['All', 'Unverified', 'Pending', 'Active', 'Completed', 'Cancelled'];
+// Added 'Overdue' to the main filters
+const STATUS_FILTERS = ['All', 'Unverified', 'Pending', 'Active', 'Overdue', 'Completed', 'Cancelled'];
 
+// Added Overdue transitions so admins can manually resolve them or switch an active booking to overdue manually if needed.
 const STATUS_TRANSITIONS = {
     Unverified: [],
     Pending:    ['Active', 'Cancelled'],
-    Active:     ['Completed', 'Cancelled'],
+    Active:     ['Completed', 'Overdue', 'Cancelled'],
+    Overdue:    ['Completed', 'Cancelled'],
     Completed:  [],
     Cancelled:  [],
 };
@@ -29,6 +32,7 @@ const DELETE_STOCK_CONTEXT = {
     Unverified: 'Stock will be restored — booking was holding reserved units.',
     Pending:    'Stock will be restored — booking was holding reserved units.',
     Active:     'Stock will be restored — vehicle is currently marked as out.',
+    Overdue:    'Stock will be restored — vehicle is currently marked as out (overdue).', // Added
     Completed:  'No stock change needed — stock was already restored when completed.',
     Cancelled:  'No stock change needed — stock was already restored when cancelled.',
 };
@@ -384,7 +388,8 @@ function PaymentPanel({ booking, onUpdated }) {
     const [saving,      setSaving]      = useState(false);
     const [error,       setError]       = useState('');
 
-    const canQuote = booking.status === 'Pending' || booking.status === 'Active';
+    // Allow Overdue bookings to be quoted (e.g., adding late fees before completion)
+    const canQuote = booking.status === 'Pending' || booking.status === 'Active' || booking.status === 'Overdue';
 
     useEffect(() => {
         setQuotedPrice(booking.quotedPrice  || '');
@@ -526,7 +531,10 @@ function AdjustBookingPanel({ booking, onAdjusted }) {
 
     const isPending = booking.status === 'Pending';
     const isActive  = booking.status === 'Active';
-    const canAdjust = isPending || isActive;
+    const isOverdue = booking.status === 'Overdue';
+    
+    // Admins can adjust Overdue bookings to extend the end date/calculate final days before completion
+    const canAdjust = isPending || isActive || isOverdue;
 
     function toInputDate(isoOrDate) {
         if (!isoOrDate) return '';
@@ -586,7 +594,7 @@ function AdjustBookingPanel({ booking, onAdjusted }) {
         <div className="bp-drawer__section">
             <p className="bp-drawer__label">{isPending ? 'Adjust Booking Dates' : 'Adjust Return Date'}</p>
             {!canAdjust ? (
-                <p style={{ fontSize: '0.8rem', color: '#9ca3af', fontStyle: 'italic', margin: 0 }}>Only Pending or Active bookings can be adjusted.</p>
+                <p style={{ fontSize: '0.8rem', color: '#9ca3af', fontStyle: 'italic', margin: 0 }}>Only Pending, Active, or Overdue bookings can be adjusted.</p>
             ) : !open ? (
                 <button onClick={handleOpen} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: '#f0fdf4', border: '1.5px solid #bbf7d0', color: '#065f46', borderRadius: 8, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700, fontFamily: 'inherit' }}>
                     {isPending ? 'Adjust Start & Return Dates' : 'Adjust Return Date'}
@@ -957,7 +965,8 @@ export default function BookingsPage() {
         try {
             await apiFetch(`/api/admin/bookings/${id}`, { method: 'DELETE' });
             setBookings(prev => prev.filter(b => b._id !== id));
-            const stockNote = ['Unverified', 'Pending', 'Active'].includes(status) ? ' Stock restored.' : '';
+            // Ensure Overdue deletes also notify admin that stock was correctly restored
+            const stockNote = ['Unverified', 'Pending', 'Active', 'Overdue'].includes(status) ? ' Stock restored.' : '';
             showToast(`Booking deleted permanently.${stockNote}`);
         } catch (err) {
             showToast(err.message, 'error');
@@ -1094,7 +1103,7 @@ export default function BookingsPage() {
                                         flexDirection: 'column', 
                                         alignItems: 'center', 
                                         justifyContent: 'center', 
-                                        padding: '60px 20px', // Increased padding for better vertical centering
+                                        padding: '60px 20px', 
                                         width: '100%',
                                         color: '#9ca3af' 
                                     }}>
@@ -1214,9 +1223,17 @@ export default function BookingsPage() {
 
             <style>{`
                 .bp-badge--unverified { background: #fef9c3; color: #854d0e; border: 1px solid #fde68a; }
+                .bp-badge--overdue { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; animation: pulse-border 2s infinite; }
                 .bp-drawer__status-banner--unverified { background: #fffbeb; }
+                .bp-drawer__status-banner--overdue { background: #fef2f2; }
                 .bp-status-btn--pending { background: #dbeafe; color: #1e40af; }
+                .bp-status-btn--overdue { background: #fee2e2; color: #991b1b; }
                 @keyframes ad-spin { to { transform: rotate(360deg); } }
+                @keyframes pulse-border { 
+                    0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); } 
+                    70% { box-shadow: 0 0 0 4px rgba(220, 38, 38, 0); } 
+                    100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); } 
+                }
             `}</style>
 
             {selected && (

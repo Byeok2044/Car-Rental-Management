@@ -150,7 +150,7 @@ router.get('/analytics', async (req, res) => {
         // Fleet stats
         const totalCars  = await Car.countDocuments();
         const [activeAgg] = await Booking.aggregate([
-            { $match: { status: 'Active' } },
+            { $match: { status: { $in: ['Active', 'Overdue'] } } }, // <-- Updated to include Overdue
             { $group: { _id: null, totalRented: { $sum: { $ifNull: ['$qty', 1] } } } },
         ]);
         const [stockAgg] = await Car.aggregate([
@@ -200,7 +200,7 @@ router.get('/analytics', async (req, res) => {
         ]);
         const bookingStats = sAgg.reduce(
             (a, x) => { a[x._id.toLowerCase()] = x.count; return a; },
-            { pending: 0, active: 0, completed: 0, cancelled: 0 }
+            { pending: 0, active: 0, overdue: 0, completed: 0, cancelled: 0 } // <-- Added overdue initializer
         );
 
         res.status(200).json({

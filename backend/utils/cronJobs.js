@@ -4,7 +4,7 @@ import BookingPayment from '../models/BookingPayment.js';
 import { sendEmail, buildOverdueEmail } from './email.js';
 
 export function startCronJobs() {
-    // Runs every day at 00:01 AM
+    // Runs every day at 00:01 AM (Asia/Manila time)
     cron.schedule('1 0 * * *', async () => {
         console.log('[CRON] Running daily overdue sweep...');
         try {
@@ -53,5 +53,8 @@ export function startCronJobs() {
         } catch (err) {
             console.error('[CRON] Error running overdue sweep:', err);
         }
+    }, {
+        scheduled: true,
+        timezone: "Asia/Manila" // <-- Ensures the cron runs at midnight PH Time
     });
 }
