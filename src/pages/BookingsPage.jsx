@@ -711,22 +711,30 @@ function BookingDrawer({ booking: initialBooking, onClose, onStatusChange, onBoo
                         </div>
                     </div>
 
-                    <div className={`bp-drawer__status-banner bp-drawer__status-banner--${booking.status.toLowerCase()}`}>
-                        <StatusBadge status={booking.status} />
-                        <PaymentPill status={booking.paymentStatus || 'Unpaid'} />
-                        {next.length > 0 && (
-                            <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
-                                {next.map(s => (
-                                    <button key={s}
-                                        className={`bp-status-btn bp-status-btn--${s.toLowerCase()}`}
-                                        onClick={() => setConfirm({ type: 'status', status: s, label: `Mark as ${s}` })}
-                                        disabled={updating || deleting}>
-                                        {updating ? '…' : s}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+                    <div className={`bp-drawer__status-banner bp-drawer__status-banner--${booking.status.toLowerCase()}`}
+    style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
+    {/* Row 1: current status + payment badges */}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <StatusBadge status={booking.status} />
+        <PaymentPill status={booking.paymentStatus || 'Unpaid'} />
+    </div>
+    {/* Row 2: transition action buttons */}
+    {next.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.72rem', color: '#9ca3af', fontWeight: 600 }}>
+                Action:
+            </span>
+            {next.map(s => (
+                <button key={s}
+                    className={`bp-status-btn bp-status-btn--${s.toLowerCase()}`}
+                    onClick={() => setConfirm({ type: 'status', status: s, label: `Mark as ${s}` })}
+                    disabled={updating || deleting}>
+                    {updating ? '…' : s}
+                </button>
+            ))}
+        </div>
+    )}
+</div>
 
                     <div className="bp-drawer__body">
                         <DocVerificationPanel booking={booking} onVerified={handleDocVerified} onRejected={handleDocRejected} />
