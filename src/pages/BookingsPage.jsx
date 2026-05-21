@@ -1225,9 +1225,9 @@ export default function BookingsPage() {
                 .bp-badge--unverified { background: #fef9c3; color: #854d0e; border: 1px solid #fde68a; }
                 .bp-badge--overdue { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; animation: pulse-border 2s infinite; }
                 .bp-drawer__status-banner--unverified { background: #fffbeb; }
-                .bp-drawer__status-banner--overdue { background: #fef2f2; }
+                .bp-drawer__status-banner--overdue { background: #fff8e1; }
                 .bp-status-btn--pending { background: #dbeafe; color: #1e40af; }
-                .bp-status-btn--overdue { background: #fee2e2; color: #991b1b; }
+                .bp-status-btn--overdue { background: #fff3e0; color: #e65100; }
                 @keyframes ad-spin { to { transform: rotate(360deg); } }
                 @keyframes pulse-border { 
                     0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); } 
