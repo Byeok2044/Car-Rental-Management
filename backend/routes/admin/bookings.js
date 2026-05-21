@@ -258,16 +258,23 @@ router.put('/:id/status', async (req, res) => {
 
         const populated = await loadFull(booking._id);
 
-        if (populated.customerEmail) {
+       if (populated.customerEmail) {
             const carTitle = populated.carId?.title || car?.title || 'your vehicle';
+            
             if (status === 'Active') {
                 const { subject, html } = buildActiveEmail(populated, carTitle);
                 sendEmail(populated.customerEmail, subject, html);
+                
             } else if (status === 'Completed') {
                 buildCompletedEmail(populated, carTitle)
                     .then(({ subject, html, attachments }) =>
                         sendEmail(populated.customerEmail, subject, html, attachments))
                     .catch(err => console.error('[completed email] failed:', err.message));
+                    
+            } else if (status === 'Overdue') {
+                // ADD THIS BLOCK for manual overdue emails
+                const { subject, html } = buildOverdueEmail(populated, carTitle);
+                sendEmail(populated.customerEmail, subject, html);
             }
         }
 
