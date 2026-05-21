@@ -14,6 +14,7 @@ import {
     buildQuoteUpdatedEmail,          // ← was missing
     buildDocsVerifiedEmail,
     buildDocsRejectedEmail,
+    buildOverdueEmail,
 } from '../../utils/email.js';
 import { generateReceiptPDF } from '../../utils/pdf.js';
 
