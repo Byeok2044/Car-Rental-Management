@@ -12,7 +12,7 @@ const STATUS_FILTERS = ['All', 'Unverified', 'Pending', 'Active', 'Overdue', 'Co
 const STATUS_TRANSITIONS = {
     Unverified: [],
     Pending:    ['Active', 'Cancelled'],
-    Active:     ['Completed', 'Overdue', 'Cancelled'],
+    Active:     ['Completed', 'Cancelled'],
     Overdue:    ['Completed', 'Cancelled'],
     Completed:  [],
     Cancelled:  [],
