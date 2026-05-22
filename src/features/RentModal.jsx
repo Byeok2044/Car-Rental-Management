@@ -57,101 +57,137 @@ async function uploadDocToCloudinary(file) {
 function TermsModal({ onClose }) {
     return (
         <>
-            <div
-                onClick={onClose}
-                style={{
-                    position: 'fixed', inset: 0,
-                    background: 'rgba(10,14,26,0.75)',
-                    backdropFilter: 'blur(4px)',
-                    zIndex: 1100,
-                }}
-            />
-            <div style={{
-                position: 'fixed',
-                top: '10%', left: '35%',
-                transform: 'translate(-50%, -50%)',
-                zIndex: 1101,
-                background: '#fff',
-                borderRadius: 16,
-                width: '100%',
-                maxWidth: 560,
-                maxHeight: '80vh',
-                display: 'flex',
-                flexDirection: 'column',
-                boxShadow: '0 24px 64px rgba(0,0,0,0.3)',
-                overflow: 'hidden',
-                animation: 'modalIn 0.28s cubic-bezier(0.34,1.56,0.64,1) both',
-            }}>
-                <div style={{
-                    background: '#111827',
-                    padding: '18px 24px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexShrink: 0,
-                    position: 'relative',
-                    overflow: 'hidden',
-                }}>
-                    <div style={{
-                        position: 'absolute', top: 0, right: -40,
-                        width: 200, height: '100%',
-                        background: '#2563eb',
-                        transform: 'skewX(-14deg)',
-                        opacity: 0.15,
-                        pointerEvents: 'none',
-                    }} />
+            <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(10,14,26,0.75)', backdropFilter: 'blur(4px)', zIndex: 1100 }} />
+            <div style={{ position: 'fixed', top: '10%', left: '35%', transform: 'translate(-50%, -50%)', zIndex: 1101, background: '#fff', borderRadius: 16, width: '100%', maxWidth: 560, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.3)', overflow: 'hidden', animation: 'modalIn 0.28s cubic-bezier(0.34,1.56,0.64,1) both' }}>
+
+                {/* Header */}
+                <div style={{ background: '#111827', padding: '18px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, position: 'relative', overflow: 'hidden' }}>
+                    <div style={{ position: 'absolute', top: 0, right: -40, width: 200, height: '100%', background: '#2563eb', transform: 'skewX(-14deg)', opacity: 0.15, pointerEvents: 'none' }} />
                     <div style={{ position: 'absolute', bottom: 0, left: 24, width: 36, height: 3, background: '#ffc107', borderRadius: 2 }} />
                     <div style={{ position: 'relative', zIndex: 1 }}>
-                        <h3 style={{ color: '#fff', margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>
-                            Terms &amp; Conditions
-                        </h3>
-                        <p style={{ color: 'rgba(255,255,255,0.45)', margin: '3px 0 0', fontSize: '0.75rem' }}>
-                            Triple R and A Car Rental — Please read carefully before booking
-                        </p>
+                        <h3 style={{ color: '#fff', margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>Data Privacy, Security &amp; Confidentiality Policy</h3>
+                        <p style={{ color: 'rgba(255,255,255,0.45)', margin: '3px 0 0', fontSize: '0.75rem' }}>Triple R &amp; A Transport Services — Please read carefully before booking</p>
                     </div>
-                    <button
-                        onClick={onClose}
-                        style={{
-                            position: 'relative', zIndex: 1,
-                            background: 'rgba(255,255,255,0.1)',
-                            border: '1px solid rgba(255,255,255,0.2)',
-                            color: '#fff', width: 32, height: 32,
-                            borderRadius: '50%', cursor: 'pointer',
-                            fontSize: '1.2rem', display: 'flex',
-                            alignItems: 'center', justifyContent: 'center',
-                            lineHeight: 1, fontFamily: 'inherit',
-                            transition: 'background 0.2s, transform 0.2s',
-                        }}
+                    <button onClick={onClose} style={{ position: 'relative', zIndex: 1, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', width: 32, height: 32, borderRadius: '50%', cursor: 'pointer', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, fontFamily: 'inherit', transition: 'background 0.2s, transform 0.2s' }}
                         onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.22)'; e.currentTarget.style.transform = 'rotate(90deg)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.transform = 'rotate(0deg)'; }}
-                    >×</button>
+                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.transform = 'rotate(0deg)'; }}>×</button>
                 </div>
 
-                <div style={{
-                    flex: 1, overflowY: 'auto',
-                    padding: '24px',
-                    fontSize: '0.875rem', color: '#374151', lineHeight: 1.75,
-                }}>
+                {/* Body */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: '24px', fontSize: '0.875rem', color: '#374151', lineHeight: 1.75 }}>
                     {[
-                        { title: '1. Eligibility & Identification', body: "Renters must be at least 21 years of age and hold a valid government-issued driver's license. A secondary ID and a deposit may be required at the time of pick-up." },
-                        { title: '2. Reservation & Payment', body: 'Bookings are confirmed only upon receipt of a quoted price from our team. Payment is accepted via Cash, GCash, or Bank Transfer. Rates are subject to change based on availability and seasonal demand.' },
-                        { title: '3. Vehicle Use', body: 'Vehicles may only be operated by the registered renter or an approved additional driver. Subletting, racing, off-road driving on unauthorized terrain, or use for commercial transport is strictly prohibited.' },
-                        { title: '4. Fuel Policy', body: 'Vehicles are provided with a full tank and must be returned with a full tank. Failure to do so will result in a refueling charge at market rates plus a service fee.' },
-                        { title: '5. Damage & Liability', body: 'The renter is liable for all damage to the vehicle during the rental period, including damage caused by third parties. Any incident must be reported to Triple R and A immediately.' },
-                        { title: '6. Cancellation Policy', body: 'Cancellations made more than 48 hours before the scheduled pick-up may be eligible for a full refund. Cancellations within 48 hours or no-shows forfeit any deposit paid.' },
-                        { title: '7. Late Returns', body: 'Vehicles returned after the agreed return time will incur additional charges at the applicable daily rate, prorated per hour.' },
-                        { title: '8. Traffic & Legal Violations', body: 'All fines, penalties, tolls, and legal fees incurred during the rental period are the sole responsibility of the renter.' },
-                        { title: '9. Prohibited Items', body: 'Smoking, transporting illegal substances, or carrying firearms inside any rental vehicle is strictly prohibited.' },
-                        { title: '10. Privacy', body: 'Personal information collected during the booking process is used solely for reservation and communication purposes. We do not sell or share your data with third parties.' },
-                    ].map((section, i) => (
-                        <div key={i} style={{ marginBottom: 18, paddingBottom: 18, borderBottom: i < 9 ? '1px solid #f1f5f9' : 'none' }}>
-                            <p style={{ margin: '0 0 5px', fontWeight: 700, color: '#111827', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {
+                            title: 'Purpose',
+                            content: (
+                                <p style={{ margin: 0, color: '#4b5563', fontSize: '0.85rem' }}>
+                                    This policy outlines the measures adopted by <strong>Triple R &amp; A Transport Services</strong> to ensure the protection, privacy, security, and confidentiality of all customer data in accordance with the <strong>Data Privacy Act of 2012 (RA 10173)</strong> and regulations set by the <strong>National Privacy Commission (NPC)</strong>. The purpose is to prevent unauthorized access, misuse, or breach of personal and sensitive personal information.
+                                </p>
+                            )
+                        },
+                        {
+                            title: 'Scope',
+                            content: <p style={{ margin: 0, color: '#4b5563', fontSize: '0.85rem' }}>This policy applies to all employees, contractors, partners, and third-party service providers who process, access, or handle customer data on behalf of Triple R &amp; A Transport Services.</p>
+                        },
+                        {
+                            title: 'Data Privacy Compliance',
+                            content: (
+                                <div style={{ color: '#4b5563', fontSize: '0.85rem', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                    <p style={{ margin: 0 }}>We fully comply with RA 10173 and all related NPC issuances of the National Privacy Commission.</p>
+                                    <p style={{ margin: 0 }}>Our Data Privacy Manual details our internal data protection practices, including lawful data processing, consent management, and data subject rights.</p>
+                                </div>
+                            )
+                        },
+                        {
+                            title: 'NPC Data Protection Officer (DPO)',
+                            content: (
+                                <div style={{ color: '#4b5563', fontSize: '0.85rem', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                    <p style={{ margin: 0 }}>We are currently in the early stages of building our data privacy program and are fully committed to complying with the NPC's requirements.</p>
+                                    <p style={{ margin: 0 }}>While a full-time DPO has not yet been appointed, we have designated an internal point person to oversee our data protection efforts and ensure ongoing progress toward compliance. This individual is responsible for coordinating privacy-related activities, including managing data subject requests and overseeing our response to any potential data breaches.</p>
+                                    <p style={{ margin: 0 }}>We are exploring options to formally appoint a qualified DPO, either through internal capacity-building or by engaging external support, in alignment with NPC regulations.</p>
+                                </div>
+                            )
+                        },
+                        {
+                            title: 'Security Measures',
+                            content: (
+                                <div style={{ color: '#4b5563', fontSize: '0.85rem' }}>
+                                    <p style={{ margin: '0 0 8px' }}>We implement the following organizational, physical, and technical security measures to safeguard personal data:</p>
+                                    <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                        <li><strong>Encryption:</strong> All sensitive personal data is encrypted both in transit and at rest.</li>
+                                        <li><strong>Monitoring and Logging:</strong> Systems are regularly monitored and access logs are maintained.</li>
+                                        <li><strong>Device and Network Security:</strong> Use of secure firewalls, anti-malware, and intrusion detection systems.</li>
+                                        <li><strong>Access Control:</strong> Role-based access to data, with authentication mechanisms such as strong passwords and multi-factor authentication.</li>
+                                    </ul>
+                                </div>
+                            )
+                        },
+                        {
+                            title: 'Privacy Impact Assessments (PIA)',
+                            content: <p style={{ margin: 0, color: '#4b5563', fontSize: '0.85rem' }}>We conduct PIAs when introducing new data processing systems or significantly changing existing ones, to evaluate and mitigate privacy risks.</p>
+                        },
+                        {
+                            title: 'Data Breach Response & Notification',
+                            content: (
+                                <ul style={{ margin: 0, paddingLeft: 18, color: '#4b5563', fontSize: '0.85rem', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                    <li>We follow a Data Breach Management Policy aligned with <strong>NPC Circular No. 16-03</strong>.</li>
+                                    <li>All employees are required to report any suspected breach from the DPO.</li>
+                                    <li>If a breach occurs, we follow the mandated protocol, including the NPC and affected data subjects are notified within <strong>72 hours</strong> where applicable.</li>
+                                </ul>
+                            )
+                        },
+                        {
+                            title: 'Employee Awareness & Training',
+                            content: (
+                                <ul style={{ margin: 0, paddingLeft: 18, color: '#4b5563', fontSize: '0.85rem', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                    <li>All employees receive regular training on data privacy principles, data protection responsibilities, and secure handling of customer information.</li>
+                                    <li>Confidentiality agreements are required as part of employment contracts.</li>
+                                </ul>
+                            )
+                        },
+                        {
+                            title: 'Third-Party Compliance',
+                            content: (
+                                <div style={{ color: '#4b5563', fontSize: '0.85rem' }}>
+                                    <p style={{ margin: '0 0 8px' }}>Third-party vendors processing customer data must comply with RA 10173 through:</p>
+                                    <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                        <li>Data Sharing Agreements (DSAs)</li>
+                                        <li>Outsourcing Contracts with equivalent security measures</li>
+                                    </ul>
+                                </div>
+                            )
+                        },
+                        {
+                            title: 'Policy Review',
+                            content: (
+                                <div style={{ color: '#4b5563', fontSize: '0.85rem', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                    <p style={{ margin: 0 }}>This policy is reviewed annually or as needed. Changes are communicated to all relevant stakeholders.</p>
+                                    <p style={{ margin: 0 }}>Contact: <a href="mailto:Sales1@tripleranda.com" style={{ color: '#2563eb' }}>Sales1@tripleranda.com</a> or <a href="mailto:Sales@tripleranda.com" style={{ color: '#2563eb' }}>Sales@tripleranda.com</a></p>
+                                </div>
+                            )
+                        },
+                        {
+                            title: 'Insurance Coverage',
+                            content: (
+                                <div style={{ color: '#4b5563', fontSize: '0.85rem' }}>
+                                    <p style={{ margin: '0 0 8px' }}>The LESSEE, passengers, and onboard properties are covered by a <strong>Comprehensive Motor Vehicle Insurance Policy</strong>, which includes:</p>
+                                    <ul style={{ margin: '0 0 8px', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                        <li>Up to <strong>Php 500,000.00 each</strong> for Third Party Bodily Injury/Death and Property Damage.</li>
+                                        <li>Personal Accident Insurance of <strong>Php 50,000.00 per passenger</strong>, though the LESSEE may increase this coverage at their own expense using the LESSOR's fleet rates.</li>
+                                    </ul>
+                                    <p style={{ margin: 0 }}>The LESSOR frees the LESSEE from third-party liabilities, provided that the LESSEE promptly reports the accident and submits all required documents.</p>
+                                </div>
+                            )
+                        },
+                    ].map((section, i, arr) => (
+                        <div key={i} style={{ marginBottom: 20, paddingBottom: 20, borderBottom: i < arr.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                            <p style={{ margin: '0 0 8px', fontWeight: 700, color: '#111827', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <span style={{ width: 22, height: 22, borderRadius: 6, background: '#eff6ff', color: '#2563eb', fontSize: '0.7rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
-                                {section.title.replace(/^\d+\.\s/, '')}
+                                {section.title}
                             </p>
-                            <p style={{ margin: '0 0 0 30px', color: '#4b5563', fontSize: '0.85rem' }}>{section.body}</p>
+                            <div style={{ marginLeft: 30 }}>{section.content}</div>
                         </div>
                     ))}
+
                     <div style={{ marginTop: 4, padding: '12px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, fontSize: '0.82rem', color: '#92400e', fontWeight: 500, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
                             <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
@@ -161,6 +197,7 @@ function TermsModal({ onClose }) {
                     </div>
                 </div>
 
+                {/* Footer */}
                 <div style={{ padding: '14px 24px', borderTop: '1px solid #f1f5f9', background: '#f8fafc', flexShrink: 0 }}>
                     <button onClick={onClose} style={{ width: '100%', padding: '10px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', fontFamily: 'inherit', transition: 'background 0.2s' }}
                         onMouseEnter={e => e.currentTarget.style.background = '#1d4ed8'}
@@ -172,7 +209,6 @@ function TermsModal({ onClose }) {
         </>
     );
 }
-
 // ── Location Picker ───────────────────────────────────────────────────────────
 const LOCATION_GROUPS = [
     {
