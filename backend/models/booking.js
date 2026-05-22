@@ -25,19 +25,4 @@ const bookingSchema = new mongoose.Schema({
     docsRejectReason: { type: String, trim: true, default: '' },
 }, { timestamps: true });
 
-// ── Auto-detect overdue on every save ────────────────────────────────────────
-bookingSchema.post('save', async function (doc) {
-    const now = new Date();
-
-    if (doc.status === 'Active' && doc.endDate < now) {
-        console.log(`[AUTO] Booking ${doc._id} detected as overdue on save.`);
-        try {
-            const { handleOverdueBooking } = await import('../utils/overdueHandler.js');
-            await handleOverdueBooking(doc);
-        } catch (err) {
-            console.error(`[AUTO] Failed to handle overdue booking ${doc._id}:`, err);
-        }
-    }
-});
-
 export default mongoose.models.Booking || mongoose.model('Booking', bookingSchema, 'bookings');

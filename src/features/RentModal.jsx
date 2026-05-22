@@ -551,11 +551,19 @@ function CartItem({ item, allCars, onUpdate, onRemove, index, error }) {
     const maxQty = item.car.stock;
 
     function handleDateChange({ start, end }) {
+        // Helper function to format the date in local time instead of UTC
+        const formatLocalDate = (dateObj) => {
+            const y = dateObj.getFullYear();
+            const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const d = String(dateObj.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        };
+
         if (start && end) {
             const days = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
-            onUpdate({ pickupDate: start.toISOString().split('T')[0], rentalDays: days });
+            onUpdate({ pickupDate: formatLocalDate(start), rentalDays: days });
         } else if (start) {
-            onUpdate({ pickupDate: start.toISOString().split('T')[0], rentalDays: 1 });
+            onUpdate({ pickupDate: formatLocalDate(start), rentalDays: 1 });
         } else {
             onUpdate({ pickupDate: '', rentalDays: 1 });
         }

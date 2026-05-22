@@ -447,7 +447,7 @@ router.put('/:id/adjust', async (req, res) => {
             .populate('carId', 'title type dailyRate image');
         if (!booking) return res.status(404).json({ message: 'Booking not found.' });
 
-        if (!['Pending', 'Active'].includes(booking.status))
+        if (!['Pending', 'Active', 'Overdue'].includes(booking.status))
             return res.status(400).json({
                 message: `Cannot adjust a "${booking.status}" booking.`,
             });
