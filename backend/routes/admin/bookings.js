@@ -11,7 +11,7 @@ import {
     buildActiveEmail,
     buildCompletedEmail,
     buildQuoteEmail,
-    buildQuoteUpdatedEmail,          // ← was missing
+    buildQuoteUpdatedEmail,
     buildDocsVerifiedEmail,
     buildDocsRejectedEmail,
     buildOverdueEmail,
@@ -125,12 +125,17 @@ router.post('/:id/verify-docs', async (req, res) => {
 
         if (customerEmail) {
             const carTitle = booking.carId?.title || 'your vehicle';
-            const { subject, html } = buildDocsVerifiedEmail(populated, carTitle);
-            sendEmail(customerEmail, subject, html);
+            // UPDATED: Await the async function to generate the dynamic Lease Contract PDF buffer and attach it
+            try {
+                const { subject, html, attachments } = await buildDocsVerifiedEmail(populated, carTitle);
+                sendEmail(customerEmail, subject, html, attachments);
+            } catch (err) {
+                console.error('[docs-verified email] failed to generate/send contract:', err.message);
+            }
         }
 
         console.log(`[verify-docs] booking ${booking._id} → Pending`);
-        return res.json({ message: 'Documents verified. Booking is now Pending.', booking: populated });
+        return res.json({ message: 'Documents verified. Booking is now Pending and contract emailed.', booking: populated });
     } catch (err) {
         console.error('verify-docs error:', err);
         return res.status(500).json({ message: 'Server Error.' });
@@ -272,7 +277,6 @@ router.put('/:id/status', async (req, res) => {
                     .catch(err => console.error('[completed email] failed:', err.message));
                     
             } else if (status === 'Overdue') {
-                // ADD THIS BLOCK for manual overdue emails
                 const { subject, html } = buildOverdueEmail(populated, carTitle);
                 sendEmail(populated.customerEmail, subject, html);
             }
@@ -288,11 +292,6 @@ router.put('/:id/status', async (req, res) => {
 });
 
 // ── PUT /api/admin/bookings/:id/quote ─────────────────────────────────────────
-//
-// FIX: Detect whether a quoted price already exists so we can send the correct
-// email — buildQuoteEmail (first quote) vs buildQuoteUpdatedEmail (revision).
-// Previously the route always sent buildQuoteEmail even on updates.
-//
 router.put('/:id/quote', async (req, res) => {
     const { quotedPrice, paymentNotes } = req.body;
 
@@ -315,10 +314,8 @@ router.put('/:id/quote', async (req, res) => {
                 message: `Cannot quote a ${booking.status} booking.`,
             });
 
-        // Capture the previous quoted price BEFORE the update so we can
-        // decide which email to send and show the before/after diff.
         const existingPayment = await BookingPayment.findOne({ bookingId: booking._id });
-        const previousPrice   = existingPayment?.quotedPrice ?? null;   // null = brand-new quote
+        const previousPrice   = existingPayment?.quotedPrice ?? null;
         const isUpdate        = previousPrice !== null && previousPrice !== Number(quotedPrice);
 
         await BookingPayment.findOneAndUpdate(
@@ -337,8 +334,6 @@ router.put('/:id/quote', async (req, res) => {
 
         if (populated.customerEmail) {
             if (isUpdate) {
-                // Admin is revising an existing quote → send the updated-quote email
-                // which shows old price, new price, and the difference.
                 const { subject, html } = buildQuoteUpdatedEmail(
                     populated,
                     carTitle,
@@ -350,7 +345,6 @@ router.put('/:id/quote', async (req, res) => {
                     `[quote-updated] booking ${booking._id} → ${fmtPeso(previousPrice)} → ${fmtPeso(quotedPrice)}`
                 );
             } else {
-                // First-time quote → send the standard quote email
                 const { subject, html } = buildQuoteEmail(populated, carTitle);
                 sendEmail(populated.customerEmail, subject, html);
                 console.log(`[quote-new] booking ${booking._id} → ${fmtPeso(quotedPrice)}`);

@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer';
 import { BRAND, fmtDate, fmtPeso } from './helpers.js';
-import { generateReceiptPDF } from './pdf.js';
+import { generateReceiptPDF, generateContractPDF } from './pdf.js';
 
 export const transporter = nodemailer.createTransport({
     service: process.env.EMAIL_SERVICE || 'gmail',
@@ -87,16 +87,6 @@ ${b.paymentNotes   ? `<tr><td>Notes</td><td>${b.paymentNotes}</td></tr>` : ''}
     };
 }
 
-// ── NEW: Quote Updated Email ───────────────────────────────────────────────────
-/**
- * Sent when an admin updates an *existing* quoted price.
- * Shows a clear before/after comparison with colour-coded change indicator.
- *
- * @param {Object} b         - Populated booking document (with customerName, etc.)
- * @param {string} t         - Human-readable vehicle title
- * @param {number} oldPrice  - The previous quoted price
- * @param {number} newPrice  - The newly set quoted price
- */
 export function buildQuoteUpdatedEmail(b, t, oldPrice, newPrice) {
     const refNo        = `#${String(b._id).slice(-8).toUpperCase()}`;
     const diff         = newPrice - oldPrice;
@@ -237,23 +227,50 @@ export async function sendEmail(to, subject, html, attachments = []) {
     }
 }
 
-export function buildDocsVerifiedEmail(booking, carTitle) {
+// ── INTEGRATED: Docs Verified / Pending Contract Email ────────────────────────
+/**
+ * Sent when admin marks a booking as Pending (documents are verified).
+ * Generates the personalized standard Lease Contract PDF dynamically and attaches it.
+ */
+export async function buildDocsVerifiedEmail(booking, carTitle) {
     const refNo = `#${String(booking._id).slice(-8).toUpperCase()}`;
+    const cleanRef = String(booking._id).slice(-8).toUpperCase();
+
+    const html = htmlShell('Documents Verified ✓', `
+        <p>Hi <strong>${booking.customerName}</strong>,</p>
+        <p>Great news! Our team has reviewed and <strong>verified your submitted documents</strong>. Your booking is now in <strong>Pending</strong> status.</p>
+        
+        ${bookingTable(booking, carTitle)}
+        
+        <div class="attach-note">
+            <strong>📄 Lease Contract Agreement Attached</strong>
+            We have attached your dynamic, personalized <strong>Contract for Lease of Motor Vehicles and Chauffeur Services</strong> based on your selected transaction profiles. Please review it carefully.
+        </div>
+
+        <p>Here's what happens next:</p>
+        <ol style="padding-left:20px;line-height:2">
+            <li>Our team will finalize your official <strong>price quote</strong> for your rental.</li>
+            <li>Once you arrange payment based on the attached document, your booking will be marked <strong>Active</strong>.</li>
+            <li>Pick up your vehicle on the agreed start date — bring a valid ID.</li>
+        </ol>
+        <p>If you have any questions in the meantime, feel free to reply to this email or contact our support team.</p>
+        <p>Thank you for choosing <strong>${BRAND}</strong>!</p>
+    `, '#16a34a');
+
+    let pdfBuffer = null;
+    try {
+        // Generates the clean contract text document matching your strict layout requirement
+        pdfBuffer = await generateContractPDF(booking);
+    } catch (err) {
+        console.error('[contract] PDF generation failed:', err.message);
+    }
+
     return {
         subject: `Documents Verified — Your Booking is Now Pending | ${BRAND}`,
-        html: htmlShell('Documents Verified ✓', `
-            <p>Hi <strong>${booking.customerName}</strong>,</p>
-            <p>Great news! Our team has reviewed and <strong>verified your submitted documents</strong>. Your booking is now in <strong>Pending</strong> status.</p>
-            ${bookingTable(booking, carTitle)}
-            <p>Here's what happens next:</p>
-            <ol style="padding-left:20px;line-height:2">
-                <li>Our team will send you a <strong>price quote</strong> for your rental.</li>
-                <li>Once you make a payment, your booking will be marked <strong>Active</strong>.</li>
-                <li>Pick up your vehicle on the agreed start date — bring a valid ID.</li>
-            </ol>
-            <p>If you have any questions in the meantime, feel free to reply to this email or contact our support team.</p>
-            <p>Thank you for choosing <strong>${BRAND}</strong>!</p>
-        `, '#16a34a'),
+        html,
+        attachments: pdfBuffer
+            ? [{ filename: `Lease_Contract_${cleanRef}.pdf`, content: pdfBuffer, contentType: 'application/pdf' }]
+            : [],
     };
 }
 
@@ -291,11 +308,11 @@ export function buildOverdueEmail(b, t) {
             <p>Our records indicate that your rental vehicle was scheduled for return on <strong>${fmtDate(b.endDate)}</strong> and is now officially <strong>Overdue</strong>.</p>
             ${bookingTable(b, t)}
             <div class="attach-note" style="border-color: #fca5a5; background: #fef2f2; color: #991b1b;">
-              <strong>⚠️ Late Fees Are Accruing</strong>
+              <strong> Late Fees Are Accruing</strong>
               Please return the vehicle immediately to avoid further daily penalty charges. If you are experiencing an emergency, please contact us immediately.
             </div>
             <p>Please reach out to our support team right away to resolve this.</p>
             <p>Warm regards,<br/><strong>${BRAND} Team</strong></p>
-        `, '#dc2626'), // Red accent color for urgency
+        `, '#dc2626'),
     };
 }
