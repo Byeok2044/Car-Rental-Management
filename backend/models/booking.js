@@ -10,26 +10,34 @@ const bookingSchema = new mongoose.Schema({
     pickupLocation: { type: String, trim: true },
     status: {
         type: String,
-        enum: ['Unverified', 'Pending', 'Active', 'Overdue', 'Completed', 'Cancelled'], // <-- Added 'Overdue'
+        enum: ['Unverified', 'Pending', 'Active', 'Overdue', 'Completed', 'Cancelled'],
         default: 'Unverified',
     },
-
-    // KYC documents — array of Cloudinary secure URLs uploaded at booking time
-    kycDocUrls:     { type: [String], default: [] },
-
-    // Customer type flag so admin knows what docs to expect
-    customerType:   { type: String, enum: ['individual', 'business'], default: 'individual' },
+    kycDocUrls:       { type: [String], default: [] },
+    customerType:     { type: String, enum: ['individual', 'business'], default: 'individual' },
     businessName:     { type: String, trim: true, default: '' },
     authorizedPerson: { type: String, trim: true, default: '' },
-
-    // Document verification tracking
-    docsVerified:   { type: Boolean, default: false },
-    docsVerifiedAt: { type: Date,    default: null },
-    docsVerifiedBy: { type: String,  default: null },
-    docsRejected:   { type: Boolean, default: false },
-    docsRejectedAt: { type: Date,    default: null },
+    docsVerified:     { type: Boolean, default: false },
+    docsVerifiedAt:   { type: Date,    default: null },
+    docsVerifiedBy:   { type: String,  default: null },
+    docsRejected:     { type: Boolean, default: false },
+    docsRejectedAt:   { type: Date,    default: null },
     docsRejectReason: { type: String, trim: true, default: '' },
-
 }, { timestamps: true });
+
+// ── Auto-detect overdue on every save ────────────────────────────────────────
+bookingSchema.post('save', async function (doc) {
+    const now = new Date();
+
+    if (doc.status === 'Active' && doc.endDate < now) {
+        console.log(`[AUTO] Booking ${doc._id} detected as overdue on save.`);
+        try {
+            const { handleOverdueBooking } = await import('../utils/overdueHandler.js');
+            await handleOverdueBooking(doc);
+        } catch (err) {
+            console.error(`[AUTO] Failed to handle overdue booking ${doc._id}:`, err);
+        }
+    }
+});
 
 export default mongoose.models.Booking || mongoose.model('Booking', bookingSchema, 'bookings');
