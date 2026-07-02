@@ -4,16 +4,16 @@ import { BRAND, fmtDate, fmtPeso } from './helpers.js';
 import { generateReceiptPDF } from './pdf.js';
 
 const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
+    // Using the dedicated relay endpoint is significantly more stable on Render
+    host: 'smtp-relay.gmail.com', 
     port: 587,
     secure: false, 
     auth: { 
         user: process.env.EMAIL_USER, 
         pass: process.env.EMAIL_PASS 
     },
-    connectionTimeout: 10000, 
-    socketTimeout: 10000,
-    // CRITICAL: Force Node to resolve the SMTP hostname using IPv4 only
+    connectionTimeout: 20000, // Bumped to 20 seconds to give Render more breathing room
+    socketTimeout: 20000,
     dnsLookup: (hostname, options, callback) => {
         return dns.lookup(hostname, { family: 4 }, callback);
     }
