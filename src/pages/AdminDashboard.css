@@ -4,6 +4,7 @@
     --primary-blue-dark: #1d4ed8;
     --accent-gold:       #ffc107;
     --accent-gold-light: #ffe08a;
+    --accent-green:      #10b981;
     --dark-grey:         #111827;
     --ad-sidebar-bg:     #0d1117;
     --ad-sidebar-border: rgba(255,255,255,0.06);
@@ -72,38 +73,58 @@
 
 .ad-sidebar__logo {
     display: flex;
+    flex-direction: row;
     align-items: center;
-    gap: 12px;
+    justify-content: center;
+    gap: 8px;
     padding: 20px 20px 18px;
     border-bottom: 1px solid var(--ad-sidebar-border);
     flex-shrink: 0;
 }
 
 .ad-sidebar__logo-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+}
+
+.ad-sidebar__logo-img {
     width: 40px;
     height: 40px;
     border-radius: 10px;
-    background: linear-gradient(135deg, var(--primary-blue), #1e3a8a);
     display: flex;
     align-items: center;
     justify-content: center;
     color: white;
-    box-shadow: 0 4px 12px rgba(37,99,235,0.4);
     flex-shrink: 0;
 }
+
+.ad-sidebar__logo-name {
+    width: 120px;
+    height: auto;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    flex-shrink: 0;
+}
+
 
 .ad-sidebar__brand {
     font-family: 'Barlow', sans-serif;
     font-weight: 800;
     font-size: 1rem;
-    color: var(--ad-text-sidebar-hi);
+    color: white;
     letter-spacing: 0.01em;
     line-height: 1.2;
 }
 
 .ad-sidebar__brand-sub {
     font-size: 0.72rem;
-    color: var(--accent-gold);
+    text-align: center;
+    color: white;
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -816,7 +837,7 @@
 
 .ad-donut__lbl {
     font-size: 0.65rem;
-    color: var(--ad-text-muted);
+    color: var(--accent-green);
     font-weight: 600;
     letter-spacing: 0.04em;
 }
@@ -841,7 +862,7 @@
     flex-shrink: 0;
 }
 .ad-fleet__dot--gold { background: var(--accent-gold); }
-.ad-fleet__dot--blue { background: var(--primary-blue); }
+.ad-fleet__dot--blue { background: var(--accent-green); }
 .ad-fleet__dot--grey { background: #6b7280; }
 
 .ad-fleet__legend-label {

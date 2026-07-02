@@ -393,7 +393,7 @@
 
 
 
-.bp-root { display: flex; flex-direction: column; gap: 16px; padding: 24px 28px; min-height: 100%; }
+.bp-root { display: flex; flex-direction: column; gap: 16px; padding: 0px; min-height: 100%; }
 
 
 .bp-stats-bar {

@@ -66,23 +66,23 @@ function Rent() {
                     : c;
             }));
 
-            setSelectedCar(null);
-
-            const refs = result.bookings?.map(b => b._id).join(', ') ?? 'N/A';
-            alert(`✅ Booking confirmed!\nReference IDs: ${refs}`);
+           
 
         } catch (err) {
             console.error('Booking error:', err);
-            alert(`❌ ${err.message}`);
+            alert(` ${err.message}`);
         }
     };
 
     return (
         <div className="rent-page">
             <header className="rent-header">
-                <h1>Our Fleet</h1>
-                <p>Select from our range of well-maintained vehicles.</p>
-            </header>
+    <div className="rent-overlay"></div> {/* Add this line */}
+    <div className="rent-header-content"> {/* Wrap content for better layering */}
+        <h1>OUR FLEET</h1>
+        <p>Select from our range of well-maintained vehicles.</p>
+    </div>
+</header>
 
             <SearchBar
                 value={searchQuery}
@@ -95,9 +95,15 @@ function Rent() {
                 {!loading && error && <p className="error-message">{error}</p>}
                 {!loading && !error && filteredCars.length === 0 && (
                     <div className="no-results">
-                        {searchQuery
-                            ? <>No cars found for "<strong>{searchQuery}</strong>"</>
-                            : 'No vehicles available at the moment.'}
+                        {searchQuery ? (
+                            <>
+                                No cars found for 
+                                <br />
+                                <strong>"{searchQuery}"</strong>
+                            </>
+                        ) : (
+                            'No vehicles available at the moment.'
+                        )}
                     </div>
                 )}
                 {!loading && !error && filteredCars.map(car => (

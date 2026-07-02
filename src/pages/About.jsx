@@ -14,9 +14,8 @@ function About() {
                         <span className="hero-subtitle">ESTABLISHED 2014</span>
                         <h1>Our Journey at Triple R and A</h1>
                         <p>
-                            From a small local fleet to a premier rental service, we've spent 
-                            the last decade perfecting the art of the journey. We don't just 
-                            rent cars; we provide the keys to your next adventure.
+                           From a small local fleet to a premier rental service, we've spent the last decade perfecting the art of the journey.
+                         <br />We don't just rent cars; we provide the keys to your next adventure.
                         </p>
                     </div>
                 </div>
@@ -121,11 +120,15 @@ function About() {
                         <p>Experience high-quality car rentals with 24/7 support.</p>
                     </div>
                     <div className="cta-actions">
-                        <Button onClick={() => navigate('/rent')} className="btn-primary-large">
-                            Browse Our Fleet
+                        <Button onClick={() => 
+                            window.scrollTo({ top: 0, behavior: 'smooth' }) || 
+                            navigate('/fleet')} className="btn-primary-large">
+                            Our Fleet
                         </Button>
-                        <button onClick={() => navigate('/contact')} className="btn-outline-white">
-                            Contact Support
+                        <button onClick={() => 
+                            window.scrollTo({ top: 0, behavior: 'smooth' }) || 
+                            navigate('/contact')} className="btn-outline-white">
+                            Contact
                         </button>
                     </div>
                 </div>

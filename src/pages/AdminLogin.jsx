@@ -6,10 +6,6 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const sanitize = (str) => str.replace(/<[^>]*>/g, '').trim();
 
-
-const isValidEmail = (value) =>
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-
 const isValidIdentifier = (value) =>
     value.trim().length >= 3;
 
@@ -17,7 +13,7 @@ function AdminLogin() {
     const navigate  = useNavigate();
     const formId    = useId();
 
-    const [formData, setFormData]         = useState({ identifier: '', password: '', rememberMe: false });
+    const [formData, setFormData]         = useState({ identifier: '', password: '' });
     const [touched,  setTouched]          = useState({ identifier: false, password: false });
     const [showPassword, setShowPassword] = useState(false);
     const [loading,  setLoading]          = useState(false);
@@ -39,11 +35,8 @@ function AdminLogin() {
         formData.password.length >= 6;
 
     const handleChange = (e) => {
-        const { name, value, type, checked } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: type === 'checkbox' ? checked : value,
-        }));
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
         if (error) setError(null);
     };
 
@@ -59,8 +52,7 @@ function AdminLogin() {
 
         const payload = {
             identifier: sanitize(formData.identifier),
-            password:   formData.password,          
-            rememberMe: formData.rememberMe,
+            password:   formData.password,
         };
 
         try {
@@ -80,8 +72,7 @@ function AdminLogin() {
             }
 
             if (data.token) {
-                const storage = formData.rememberMe ? localStorage : sessionStorage;
-                storage.setItem('adminToken', data.token);
+                sessionStorage.setItem('adminToken', data.token);
             }
 
             navigate('/admin/dashboard');
@@ -113,10 +104,11 @@ function AdminLogin() {
                             <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                         </svg>
                     </div>
-                    <p className="al-eyebrow">Triple R and A Car Rental</p>
+                    <p className="al-eyebrow">Triple R & A Transport Services</p>
                     <h1 className="al-title">Admin Portal</h1>
                     <p className="al-subtitle">Sign in to manage your fleet and bookings.</p>
                 </header>
+
                 {error && (
                     <div className="al-error" role="alert" aria-live="assertive">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
@@ -167,6 +159,7 @@ function AdminLogin() {
                             </p>
                         )}
                     </div>
+
                     <div className="al-field">
                         <div className="al-label-row">
                             <label htmlFor={`${formId}-password`} className="al-label">
@@ -229,21 +222,7 @@ function AdminLogin() {
                             </p>
                         )}
                     </div>
-                    <div className="al-remember">
-                        <label className="al-checkbox-label">
-                            <input
-                                type="checkbox"
-                                name="rememberMe"
-                                className="al-checkbox"
-                                checked={formData.rememberMe}
-                                onChange={handleChange}
-                                disabled={loading}
-                                aria-label="Remember me for 30 days"
-                            />
-                            <span className="al-checkbox-custom" aria-hidden="true" />
-                            <span className="al-checkbox-text">Remember me for 30 days</span>
-                        </label>
-                    </div>
+
                     <button
                         type="submit"
                         className="al-submit"
@@ -261,15 +240,8 @@ function AdminLogin() {
                         )}
                     </button>
                 </form>
+
                 <footer className="al-footer">
-                    <button
-                        type="button"
-                        className="al-back"
-                        onClick={() => navigate('/')}
-                        aria-label="Go back to homepage"
-                    >
-                        ← Back to Home
-                    </button>
                 </footer>
             </div>
         </main>

@@ -4,6 +4,8 @@ import './Footer.css';
 import Logo from '../../assets/Logo.svg';
 import LName from '../../assets/LName.png';
 
+const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+
 function Footer() {
     return (
         <footer className="footer">
@@ -16,33 +18,34 @@ function Footer() {
                     </Link>
                     <p>Your premium car rental destination. Reliable, affordable, and ready for your next journey across the Philippines.</p>
                 </div>
+
                 <div className="footer-section">
                     <h3>Explore</h3>
                     <ul>
-                        <li><Link to="/">Home</Link></li>
-                        <li><Link to="/fleet">Our Fleet</Link></li>
-                        <li><Link to="/about">About Us</Link></li>
+                        <li><Link to="/" onClick={scrollTop}>Home</Link></li>
+                        <li><Link to="/fleet" onClick={scrollTop}>Our Fleet</Link></li>
+                        <li><Link to="/about" onClick={scrollTop}>About Us</Link></li>
                     </ul>
                 </div>
+
                 <div className="footer-section">
                     <h3>Support</h3>
                     <ul>
-                        <li><Link to="/faq">FAQs</Link></li>
-                        <li><Link to="/contact">Contact Us</Link></li>
-                        <li><Link to="/privacy">Privacy Policy</Link></li>
-                        <li><Link to="/terms">Terms of Service</Link></li>
+                        <li><Link to="/contact" onClick={scrollTop}>Contact Us</Link></li>
                     </ul>
                 </div>
             </div>
+
             <div className="footer-bottom">
-                <p>&copy; {new Date().getFullYear()} Triple R and A Car Rental. All rights reserved.</p>
+                <p>&copy; {new Date().getFullYear()} Triple R and A Transport Services. All rights reserved.</p>
                 <div className="footer-bottom-accent">
                     <span /><span /><span />
                 </div>
             </div>
-            <button 
-                className="floating-return-btn" 
-                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+
+            <button
+                className="floating-return-btn"
+                onClick={scrollTop}
                 aria-label="Back to top"
             >
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

@@ -26,7 +26,7 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 0;
+    padding: 0; 
 }
 
 .hero-content {
@@ -74,7 +74,7 @@
 
 .hero-cta button {
     background: #ffc107;
-    color: #375d97;
+    color: #000000;
     border: none;
     padding: 12px 30px;
     border-radius: 8px;
@@ -266,9 +266,19 @@
 }
 
 @media (max-width: 768px) {
-    .hero-content h1 { font-size: 2.5rem; }
+    .hero-overlay { padding: 0 5%; }
+    .hero-subtitle { 
+        font-size: 1.8rem !important; 
+        white-space: normal !important;
+        text-align: center !important;
+    }
+    .hero-content h1 { font-size: 1.4rem !important; }
+    .hero-content p { 
+        font-size: 1rem !important; 
+        white-space: normal !important;
+        text-align: center !important;
+    }
+    .hero-cta { flex-direction: column; align-items: center; }
     .info-grid { grid-template-columns: 1fr; }
     .car-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
-    .hero-overlay { padding: 0 5%; }
-    .hero-cta { flex-direction: column; align-items: flex-start; }
 }
