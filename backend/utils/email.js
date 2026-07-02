@@ -1,27 +1,23 @@
-import nodemailer from 'nodemailer';
-import dns from 'dns'; // Import Node's native DNS module
+import { Resend } from 'resend';
 import { BRAND, fmtDate, fmtPeso } from './helpers.js';
 import { generateReceiptPDF } from './pdf.js';
 
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 2525, // Port 2525 bypasses standard ISP/cloud SMTP blockades
-    secure: false, // true for 465, false for other ports
-    auth: { 
-        user: process.env.EMAIL_USER, 
-        pass: process.env.EMAIL_PASS 
-    },
-    connectionTimeout: 15000, 
-    socketTimeout: 15000,
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+const FROM = process.env.EMAIL_FROM || 'TripleR&A@gmail.com';
 
 export function getTransporter() {
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-        console.warn('Email credentials not set. Email functions will be disabled.');
+    if (!process.env.RESEND_API_KEY) {
+        console.warn('RESEND_API_KEY not set. Email functions will be disabled.');
     }
-    return transporter;
+    // kept for compatibility with any code calling getTransporter().verify(...)
+    return {
+        verify: async () => {
+            if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY missing');
+            return true;
+        },
+    };
 }
-
 // ── HTML TEMPLATE ─────────────────────────────────────────────────────────────
 
 export function htmlShell(title, body, accent = '#2563eb') {
@@ -233,13 +229,20 @@ export function buildReplyEmail(msg, replySubject, replyBody) {
 // ── SEND ──────────────────────────────────────────────────────────────────────
 
 export async function sendEmail(to, subject, html, attachments = []) {
-    if (!to || !process.env.EMAIL_USER) return;
+    if (!to || !process.env.RESEND_API_KEY) return;
     try {
-        await getTransporter().sendMail({
-            from: `"${BRAND}" <${process.env.EMAIL_USER}>`,
-            to, subject, html, attachments,
+        const { data, error } = await resend.emails.send({
+            from: FROM,
+            to,
+            subject,
+            html,
+            attachments: attachments.map(a => ({
+                filename: a.filename,
+                content: a.content.toString('base64'), // Resend wants base64, not a Buffer
+            })),
         });
-        console.log(`Email -> ${to}${attachments.length ? ` (+${attachments.length} attachment(s))` : ''}`);
+        if (error) throw new Error(error.message || JSON.stringify(error));
+        console.log(`Email -> ${to}${attachments.length ? ` (+${attachments.length} attachment(s))` : ''} [${data?.id}]`);
     } catch (e) {
         console.error('Email error:', e.message);
     }
