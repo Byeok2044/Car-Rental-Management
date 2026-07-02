@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import dns from 'dns'; // Import Node's native DNS module
 import { BRAND, fmtDate, fmtPeso } from './helpers.js';
 import { generateReceiptPDF } from './pdf.js';
 
