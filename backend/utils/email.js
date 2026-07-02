@@ -5,13 +5,17 @@ import { generateReceiptPDF } from './pdf.js';
 const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 587,
-    secure: false, // Must be false for port 587 (STARTTLS)
+    secure: false, 
     auth: { 
         user: process.env.EMAIL_USER, 
         pass: process.env.EMAIL_PASS 
     },
     connectionTimeout: 10000, 
     socketTimeout: 10000,
+    // CRITICAL: Force Node to resolve the SMTP hostname using IPv4 only
+    dnsLookup: (hostname, options, callback) => {
+        return dns.lookup(hostname, { family: 4 }, callback);
+    }
 });
 
 
