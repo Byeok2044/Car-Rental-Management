@@ -5,7 +5,7 @@ function SearchBar({ value, onChange, placeholder = "Search for a car..." }) {
   return (
     <div className="search-wrapper">
       <div className="search-input-container">
-        <span className="search-icon">🔍</span>
+        <span className="search-icon"></span>
         <input
           type="text"
           className="search-input"

@@ -16,6 +16,19 @@ function Contact() {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError]           = useState(null);
 
+    // --- Strict Validation: Only updates state if input is non-numeric ---
+    const handleNameChange = (e) => {
+        const value = e.target.value;
+        // Regex: Allows only letters, spaces, hyphens, and dots.
+        const nameRegex = /^[a-zA-Z\s.\-]*$/;
+        
+        // If the new value matches the regex, update the state.
+        // If it contains a number, the state remains as it was.
+        if (nameRegex.test(value)) {
+            setFormData({ ...formData, name: value });
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
@@ -43,32 +56,13 @@ function Contact() {
     return (
         <div className="contact-page">
             <header className="contact-header">
-                <h1>Contact Us</h1>
-                <p>Have questions? We're here to help you get on the road.</p>
+                <div className='contact-overlay'>   
+                    <h1>HAVE QUESTIONS? CONTACT US.</h1>
+                    <p>We're here to help you get on the road.</p>
+                </div>
             </header>
 
             <div className="contact-container">
-                <aside className="contact-info">
-                    <div className="info-block">
-                        <h3>Our Office</h3>
-                        <p>Main Branch Headquarters</p>
-                        <p>Manila, Philippines</p>
-                    </div>
-
-                    <div className="info-block">
-                        <h3>Customer Support</h3>
-                        <p><strong>Phone:</strong> 12345678910</p>
-                        <p><strong>Email:</strong> reychee06@gmail.com</p>
-                    </div>
-
-                    <div className="info-block">
-                        <h3>Business Hours</h3>
-                        <p>Monday - Friday: 8:00 AM - 6:00 PM</p>
-                        <p>Saturday - Sunday: 9:00 AM - 4:00 PM</p>
-                        <p><em>24/7 Support for Active Rentals</em></p>
-                    </div>
-                </aside>
-
                 <main className="contact-form-container">
                     {submitted ? (
                         <div className="success-message">
@@ -78,11 +72,12 @@ function Contact() {
                         </div>
                     ) : (
                         <form onSubmit={handleSubmit} className="contact-form">
+                            {/* General API error display */}
                             {error && (
                                 <div style={{
                                     background: '#fee2e2', color: '#b91c1c',
                                     border: '1px solid #fca5a5', borderRadius: 8,
-                                    padding: '10px 14px', fontSize: '0.875rem', marginBottom: 4,
+                                    padding: '10px 14px', fontSize: '0.875rem', marginBottom: 15
                                 }}>
                                     {error}
                                 </div>
@@ -95,7 +90,7 @@ function Contact() {
                                     required
                                     placeholder="Your Name"
                                     value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                    onChange={handleNameChange}
                                 />
                             </div>
 
@@ -142,23 +137,22 @@ function Contact() {
                         </form>
                     )}
                 </main>
-            </div>
 
-            <section className="map-section">
-                <h3>Find Us on the Map</h3>
-                <div className="map-wrapper">
-                    <iframe
-                        title="Office Location"
-                        src="https://maps.google.com/maps?q=2F Alphabase Bldg, 45 Scout Rallos Brgy. Laging Handa, Quezon City&z=15&output=embed"
-                        width="100%"
-                        height="450"
-                        style={{ border: 0 }}
-                        allowFullScreen=""
-                        loading="lazy"
-                        referrerPolicy="no-referrer-when-downgrade">
-                    </iframe>
-                </div>
-            </section>
+                <section className="map-section">
+                    <div className="map-wrapper">
+                        <iframe
+                            title="Office Location"
+                            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3860.3649663597666!2d121.02148317457362!3d14.63521237622937!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3397b64fd908e0af%3A0xe04536d006e74a08!2sBen-Lor%20Building%2C%20Quezon%20Ave%2C%20Diliman%2C%20Quezon%20City%2C%201103%20Metro%20Manila!5e0!3m2!1sen!2sph!4v1776532521820!5m2!1sen!2sph"
+                            width="100%"
+                            height="450"
+                            style={{ border: 0 }}
+                            allowFullScreen=""
+                            loading="lazy"
+                            referrerPolicy="no-referrer-when-downgrade">
+                        </iframe>
+                    </div>
+                </section>
+            </div>
         </div>
     );
 }

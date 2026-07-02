@@ -8,11 +8,15 @@ import AboutUs from './pages/About.jsx';
 import AdminLogin from './pages/AdminLogin.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
+import ForgotPassword from './pages/ForgotPassword.jsx';
+import ResetPassword from './pages/ResetPassword.jsx';
 
 function App() {
   return (
     <Router>
       <Routes>
+
+        {/* Public routes — with Header and Footer */}
         <Route path="/*" element={
           <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
             <Header />
@@ -22,12 +26,16 @@ function App() {
                 <Route path="/fleet" element={<Rent />} />
                 <Route path="/contact" element={<Contact />} />
                 <Route path="/about" element={<AboutUs />} />
-                <Route path="/admin/login" element={<AdminLogin />} />
               </Routes>
             </main>
             <Footer />
           </div>
         } />
+
+        {/* Admin routes — standalone, no Header/Footer */}
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin/forgot-password" element={<ForgotPassword />} />
+        <Route path="/admin/reset-password" element={<ResetPassword />} />
 
         <Route
           path="/admin/dashboard"
@@ -37,6 +45,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+
       </Routes>
     </Router>
   );

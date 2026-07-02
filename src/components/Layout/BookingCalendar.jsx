@@ -1,11 +1,26 @@
 import React, { useState } from 'react';
 import './BookingCalendar.css';
 
-const BookingCalendar = ({ onDateSelect }) => {
-    const [startDate, setStartDate] = useState(null);
-    const [endDate, setEndDate] = useState(null);
+const BookingCalendar = ({ onDateSelect, savedStartDate, savedDays }) => {
+    const parseSavedDate = (dateStr) => {
+        if (!dateStr) return null;
+        const [year, month, day] = dateStr.split('-').map(Number);
+        return new Date(year, month - 1, day);
+    };
+    const [startDate, setStartDate] = useState(() => parseSavedDate(savedStartDate));
+    const [endDate, setEndDate] = useState(() => {
+        const start = parseSavedDate(savedStartDate);
+        if (!start || !savedDays || savedDays <= 1) return null;
+        
+        const end = new Date(start);
+        end.setDate(start.getDate() + (savedDays - 1));
+        return end;
+    });
     const [hoverDate, setHoverDate] = useState(null);
-    const [currentMonth, setCurrentMonth] = useState(new Date());
+    const [currentMonth, setCurrentMonth] = useState(() => {
+        const start = parseSavedDate(savedStartDate);
+        return start ? new Date(start.getFullYear(), start.getMonth(), 1) : new Date();
+    });
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);

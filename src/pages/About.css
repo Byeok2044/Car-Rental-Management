@@ -20,8 +20,7 @@
 }
 
 .hero-overlay {
-    background: rgba(0, 0, 0, 0.6);
-    width: 100%;
+    background: linear-gradient(110deg, rgba(17,24,39,0.88) 55%, rgba(37,99,235,0.25) 100%);
     height: 100%;
     display: flex;
     align-items: center;
@@ -30,15 +29,30 @@
 
 .hero-content {
     color: white;
-    max-width: 620px;
+    /* Centers the box itself in the middle of the screen */
+    margin: 0 auto; 
+    /* Limits the width so it doesn't bleed off the edges */
+    max-width: 800px; 
+    width: 90%;
+    text-align: center;
+    /* Ensures the subtitle, h1, and p stack vertically */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .hero-subtitle {
-    display: block;
-    font-size: 0.9rem;
-    letter-spacing: 2px;
+     display: inline-block;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
     color: var(--accent-gold);
-    margin-bottom: 10px;
+    margin-bottom: 16px;
+    padding: 4px 12px;
+    border: 1px solid rgba(255,193,7,0.4);
+    border-radius: 20px;
+    background: rgba(255,193,7,0.08);
 }
 
 .hero-content h1 {
@@ -51,19 +65,27 @@
     font-size: 1.2rem;
     margin-bottom: 30px;
     opacity: 0.9;
+    color: #d3d1d1;
+
 }
 
 .mission-section {
-    padding: 70px 10%;
-    background: white;
+    background: var(--dark-grey);
+    padding: 90px 10% 100px;
+    position: relative;
+    overflow: hidden;
+    clip-path: polygon(0 0, 100% 0, 100% 93%, 0 100%);
+    padding-bottom: 130px;
 }
 
 .mission-grid-container {
     display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 40px;
-    align-items: start;
-    margin-bottom: 50px;
+    grid-template-columns: 1fr 1.6fr;
+    gap: 60px;
+    align-items: center;
+    margin-bottom: 60px;
+    position: relative;
+    z-index: 1;
 }
 
 .mission-header {
@@ -74,23 +96,28 @@
     min-width: 180px;
 }
 
-.accent-line {
-    display: block;
-    width: 50px;
-    height: 4px;
-    background: var(--primary-blue);
-    border-radius: 2px;
-}
-
 .mission-header h2 {
     font-size: 2rem;
     color: var(--primary-blue);
     margin: 0;
+    font-size: clamp(3.5rem, 3vw, 2.8rem);
+    /* CHANGE: This makes the text white so it pops */
+    color: #ffffff; 
+    margin: 0;
+    line-height: 1.15;
+}
+
+.accent-line {
+    display: block;
+    width: 48px;
+    height: 4px;
+    background: linear-gradient(to right, var(--accent-gold), transparent);
+    border-radius: 4px;
 }
 
 .mission-content-box p {
     font-size: 1.05rem;
-    color: #555;
+    color: #d3d1d1;
     line-height: 1.8;
     margin-bottom: 12px;
 }
@@ -102,25 +129,45 @@
 .facts-bar {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 20px;
-    background: var(--primary-blue);
-    border-radius: 12px;
-    padding: 30px 20px;
-    text-align: center;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.03);
+    backdrop-filter: blur(8px);
+    position: relative;
+    z-index: 1;
 }
 
 .fact-item {
-    color: white;
-    font-size: 0.95rem;
-    letter-spacing: 0.5px;
+    padding: 28px 20px;
+    text-align: center;
+    color: #d3d1d1;
+    border-right: 1px solid rgba(255,255,255,0.06);
+    transition: background 0.3s;
+}
+
+.fact-item:last-child { border-right: none; }
+
+.fact-item:hover {
+    background: rgba(255,193,7,0.06);
 }
 
 .fact-item strong {
     display: block;
-    font-size: 2rem;
+    font-family: var(--font-display);
+    font-size: 2.2rem;
+    font-weight: 900;
     color: var(--accent-gold);
     margin-bottom: 4px;
-    line-height: 1.1;
+    line-height: 1;
+}
+
+.fact-item span {
+    font-size: 0.82rem;
+    color: rgba(255,255,255,0.45);
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    display: block;
 }
 
 .info-section {
@@ -135,17 +182,21 @@
 .section-header {
     text-align: center;
     margin-bottom: 50px;
+    color: rgb(255, 255, 255);
+
 }
 
 .section-header h2 {
     font-size: 2.5rem;
-    color: var(--primary-blue);
+    color: var(--accent-gold) !important; 
     margin-bottom: 10px;
 }
 
+
 .section-header p {
-    color: #777;
     font-size: 1rem;
+        color: rgba(255,255,255,0.45);
+
 }
 
 .info-grid {
@@ -181,8 +232,11 @@
 }
 
 .split-section {
-    padding: 70px 10%;
+    padding: 50px 10%;
     background: white;
+    position: relative;
+    z-index: 1; /* Keep this lower than the testimonials section */
+    padding-bottom: 120px
 }
 
 .split-content {
@@ -221,7 +275,7 @@
     color: #444;
     line-height: 1.6;
     padding-left: 16px;
-    border-left: 3px solid var(--primary-blue);
+    border-left: 3px solid var(--dark-grey);
 }
 
 .benefits-list-simple li strong {
@@ -234,12 +288,24 @@
     line-height: 1.8;
 }
 
-.testimonials-bg {
-    background: var(--dark-grey);
+.info-section.testimonials-bg {
+    background-color: var(--dark-grey) !important; /* Forces the dark color */
+    position: relative;
+    
+    /* THE SLANT */
+    /* This cuts the TOP and the BOTTOM of the dark section */
+    clip-path: polygon(0 10%, 100% 0, 100% 90%, 0 100%);
+    
+    /* SPACING - Very important so text stays in the middle */
+    padding: 160px 8% !important; 
+    margin-top: -80px; /* Pulls it up so there is no white gap */
+    z-index: 5;
 }
 
 .testimonials-bg .section-header h2 {
-    color: white;
+    margin-top: -90px;
+    position: relative;
+    
 }
 
 .info-card.testimonial {
@@ -274,10 +340,12 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: var(--primary-blue);
-    border-radius: 16px;
-    padding: 50px 60px;
-    gap: 30px;
+    gap: 40px;
+    background: var(--dark-grey);
+    border-radius: 20px;
+    padding: 54px 64px;
+    position: relative;
+    overflow: hidden;
 }
 
 .cta-text h2 {
@@ -337,6 +405,7 @@
 @media (max-width: 1024px) {
     .facts-bar {
         grid-template-columns: repeat(2, 1fr);
+
     }
 
     .split-content {
@@ -370,14 +439,13 @@
     }
 
     .mission-header {
-        flex-direction: row;
-        align-items: center;
-        min-width: unset;
-    }
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    /* Ensure it aligns with the text on the right */
+        padding-top: 10px;
 
-    .accent-line {
-        display: none;
-    }
+     }
 
     .facts-bar {
         grid-template-columns: repeat(2, 1fr);

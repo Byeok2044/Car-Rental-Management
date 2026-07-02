@@ -71,7 +71,7 @@
 .al-card {
     position: relative;
     z-index: 1;
-    background: var(--al-card-bg);
+    background: #111827;
     border-radius: var(--al-radius-lg);
     padding: 2.75rem 2.5rem;
     width: 100%;
@@ -96,9 +96,9 @@
     justify-content: center;
     width: 56px;
     height: 56px;
-    background: var(--al-blue);
+    background: #ffc107;
     border-radius: var(--al-radius-md);
-    color: #fff;
+    color: black;
     margin-bottom: 1rem;
     box-shadow: 0 4px 16px rgba(37, 99, 235, 0.38);
 }
@@ -108,14 +108,14 @@
     font-weight: 700;
     letter-spacing: 2.5px;
     text-transform: uppercase;
-    color: var(--al-blue);
+    color: #2563eb;
     margin: 0 0 0.35rem;
 }
 
 .al-title {
     font-size: 1.875rem;
     font-weight: 800;
-    color: var(--al-grey-900);
+    color: white;
     margin: 0 0 0.35rem;
     line-height: 1.15;
     letter-spacing: -0.5px;
@@ -174,19 +174,19 @@
 .al-label {
     font-size: 0.8rem;
     font-weight: 600;
-    color: var(--al-grey-700);
+    color: #2563eb;
     letter-spacing: 0.2px;
 }
 
 .al-forgot {
     font-size: 0.78rem;
     font-weight: 500;
-    color: var(--al-blue);
+    color: #2563eb;
     text-decoration: none;
     transition: color var(--al-transition), opacity var(--al-transition);
 }
 
-.al-forgot:hover  { color: var(--al-blue-dark); text-decoration: underline; }
+.al-forgot:hover  { text-decoration: underline; }
 .al-forgot:focus-visible {
     outline: 2px solid var(--al-blue);
     outline-offset: 2px;
@@ -343,8 +343,8 @@
     margin-top: 0.5rem;
     width: 100%;
     padding: 0.82rem 1rem;
-    background: var(--al-blue);
-    color: #fff;
+    background: #ffc107;
+    color: black;
     border: none;
     border-radius: var(--al-radius-sm);
     font-size: 0.95rem;
@@ -356,14 +356,14 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.32);
+    
     transition: background var(--al-transition), transform var(--al-transition), box-shadow var(--al-transition), opacity var(--al-transition);
 }
 
 .al-submit:hover:not(:disabled) {
-    background: var(--al-blue-dark);
+    background: #ffc107cc;
     transform: translateY(-2px);
-    box-shadow: 0 7px 20px rgba(37, 99, 235, 0.4);
+    
 }
 
 .al-submit:active:not(:disabled) {
@@ -413,9 +413,9 @@
     transition: color var(--al-transition), background var(--al-transition);
 }
 
-.al-back:hover { color: var(--al-blue); background: var(--al-blue-ring); }
+.al-back:hover { color: #2563eb; background: var(--al-blue-ring); }
 .al-back:focus-visible {
-    outline: 2px solid var(--al-blue);
+    outline: 2px solid #2563eb;
     outline-offset: 2px;
 }
 
