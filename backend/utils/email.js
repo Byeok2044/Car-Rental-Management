@@ -4,19 +4,15 @@ import { BRAND, fmtDate, fmtPeso } from './helpers.js';
 import { generateReceiptPDF } from './pdf.js';
 
 const transporter = nodemailer.createTransport({
-    host: '74.125.142.108', // This is the direct IPv4 for smtp.gmail.com / smtp-relay.gmail.com
-    port: 587,
-    secure: false, 
+    host: 'smtp.gmail.com',
+    port: 2525, // Port 2525 bypasses standard ISP/cloud SMTP blockades
+    secure: false, // true for 465, false for other ports
     auth: { 
         user: process.env.EMAIL_USER, 
         pass: process.env.EMAIL_PASS 
     },
     connectionTimeout: 15000, 
     socketTimeout: 15000,
-    tls: {
-        // Crucial: Tells TLS to expect the gmail domain name so the certificate matches
-        servername: 'smtp.gmail.com'
-    }
 });
 
 export function getTransporter() {
