@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import BlacklistedToken from '../models/BlacklistedToken.js';
+import BlacklistedToken from '../models/Blacklistedtoken.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your_fallback_secret_key';
 
