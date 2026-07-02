@@ -2,10 +2,18 @@ import nodemailer from 'nodemailer';
 import { BRAND, fmtDate, fmtPeso } from './helpers.js';
 import { generateReceiptPDF } from './pdf.js';
 
-export const transporter = nodemailer.createTransport({
-    service: process.env.EMAIL_SERVICE || 'gmail',
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+const transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // Must be false for port 587 (STARTTLS)
+    auth: { 
+        user: process.env.EMAIL_USER, 
+        pass: process.env.EMAIL_PASS 
+    },
+    connectionTimeout: 10000, 
+    socketTimeout: 10000,
 });
+
 
 export function getTransporter() {
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
