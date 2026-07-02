@@ -19,9 +19,9 @@ app.use(cors());
 app.use(express.json());
 app.use(generalLimiter);
 
-getTransporter().verify(err =>
-    err ? console.warn('Email not ready:', err.message) : console.log('Email ready')
-);
+if (!process.env.RESEND_API_KEY) {
+    console.warn('RESEND_API_KEY not set — outbound email is disabled.');
+}
 
 // This line now handles the receipt route through the nested routers
 app.use('/api', router);
