@@ -230,6 +230,21 @@ export function buildReplyEmail(msg, replySubject, replyBody) {
 export async function sendEmail(to, subject, html, attachments = []) {
     if (!to || !process.env.BREVO_API_KEY) return;
     try {
+        const payload = {
+            sender: { name: BRAND, email: FROM },
+            to: [{ email: to }],
+            subject,
+            htmlContent: html,
+        };
+
+        // Only include the attachment field if there's actually something to attach
+        if (attachments.length > 0) {
+            payload.attachment = attachments.map(a => ({
+                name: a.filename,
+                content: a.content.toString('base64'),
+            }));
+        }
+
         const res = await fetch(BREVO_API_URL, {
             method: 'POST',
             headers: {
@@ -237,16 +252,7 @@ export async function sendEmail(to, subject, html, attachments = []) {
                 'Content-Type': 'application/json',
                 'accept': 'application/json',
             },
-            body: JSON.stringify({
-                sender: { name: BRAND, email: FROM },
-                to: [{ email: to }],
-                subject,
-                htmlContent: html,
-                attachment: attachments.map(a => ({
-                    name: a.filename,
-                    content: a.content.toString('base64'),
-                })),
-            }),
+            body: JSON.stringify(payload),
         });
 
         const data = await res.json().catch(() => ({}));
