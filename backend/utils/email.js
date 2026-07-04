@@ -2,18 +2,17 @@ import { Resend } from 'resend';
 import { BRAND, fmtDate, fmtPeso } from './helpers.js';
 import { generateReceiptPDF } from './pdf.js';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 
-const FROM = process.env.EMAIL_FROM || 'TripleR&A@gmail.com';
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
+const FROM = process.env.EMAIL_FROM || 'reychee06@gmail.com';
 
 export function getTransporter() {
-    if (!process.env.RESEND_API_KEY) {
-        console.warn('RESEND_API_KEY not set. Email functions will be disabled.');
+    if (!process.env.BREVO_API_KEY) {
+        console.warn('BREVO_API_KEY not set. Email functions will be disabled.');
     }
-    // kept for compatibility with any code calling getTransporter().verify(...)
     return {
         verify: async () => {
-            if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY missing');
+            if (!process.env.BREVO_API_KEY) throw new Error('BREVO_API_KEY missing');
             return true;
         },
     };
@@ -229,20 +228,31 @@ export function buildReplyEmail(msg, replySubject, replyBody) {
 // ── SEND ──────────────────────────────────────────────────────────────────────
 
 export async function sendEmail(to, subject, html, attachments = []) {
-    if (!to || !process.env.RESEND_API_KEY) return;
+    if (!to || !process.env.BREVO_API_KEY) return;
     try {
-        const { data, error } = await resend.emails.send({
-            from: FROM,
-            to,
-            subject,
-            html,
-            attachments: attachments.map(a => ({
-                filename: a.filename,
-                content: a.content.toString('base64'), // Resend wants base64, not a Buffer
-            })),
+        const res = await fetch(BREVO_API_URL, {
+            method: 'POST',
+            headers: {
+                'api-key': process.env.BREVO_API_KEY,
+                'Content-Type': 'application/json',
+                'accept': 'application/json',
+            },
+            body: JSON.stringify({
+                sender: { name: BRAND, email: FROM },
+                to: [{ email: to }],
+                subject,
+                htmlContent: html,
+                attachment: attachments.map(a => ({
+                    name: a.filename,
+                    content: a.content.toString('base64'),
+                })),
+            }),
         });
-        if (error) throw new Error(error.message || JSON.stringify(error));
-        console.log(`Email -> ${to}${attachments.length ? ` (+${attachments.length} attachment(s))` : ''} [${data?.id}]`);
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.message || `Brevo HTTP ${res.status}`);
+
+        console.log(`Email -> ${to}${attachments.length ? ` (+${attachments.length} attachment(s))` : ''} [${data.messageId}]`);
     } catch (e) {
         console.error('Email error:', e.message);
     }
